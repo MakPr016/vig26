@@ -1,6 +1,5 @@
+// lib/validations.ts
 import { z } from "zod";
-
-// ─── Auth ─────────────────────────────────────────────────────────────────────
 
 export const signupSchema = z.object({
     name: z.string().min(2, "Name must be at least 2 characters").trim(),
@@ -33,8 +32,6 @@ export const acceptInviteSchema = z
         path: ["confirmPassword"],
     });
 
-// ─── Invite ───────────────────────────────────────────────────────────────────
-
 export const sendInviteSchema = z.object({
     name: z.string().min(2).trim(),
     email: z.string().email().toLowerCase().trim(),
@@ -42,52 +39,45 @@ export const sendInviteSchema = z.object({
     departmentId: z.string().min(1, "Department is required"),
 });
 
-// ─── Department ───────────────────────────────────────────────────────────────
-
 export const createDepartmentSchema = z.object({
     name: z.string().min(2, "Department name must be at least 2 characters").trim(),
     description: z.string().trim().optional(),
 });
 
-// ─── Category ─────────────────────────────────────────────────────────────────
-
 export const createCategorySchema = z.object({
     name: z.string().min(2, "Category name must be at least 2 characters").trim(),
 });
-
-// ─── Form Field (Dynamic Form Builder) ───────────────────────────────────────
 
 export const formFieldSchema = z.object({
     label: z.string().min(1, "Field label is required").trim(),
     type: z.enum(["short_text", "long_text", "dropdown", "checkbox", "file_upload"]),
     placeholder: z.string().trim().optional(),
     isRequired: z.boolean().default(false),
-    options: z.array(z.string().trim().min(1)).optional(), // required for dropdown
+    options: z.array(z.string().trim().min(1)).optional(),
     order: z.number().int().min(0),
 });
 
-// ─── Event ────────────────────────────────────────────────────────────────────
+const eventBaseSchema = z.object({
+    title: z.string().min(3, "Title must be at least 3 characters").trim(),
+    description: z.string().trim().optional(),
+    coverImage: z.string().url().optional().or(z.literal("")),
+    type: z.enum(["inter", "intra"]),
+    category: z.string().min(1, "Category is required").toLowerCase().trim(),
+    departmentId: z.string().min(1, "Department is required"),
+    dateStart: z.string().datetime({ message: "Invalid start date" }),
+    dateEnd: z.string().datetime({ message: "Invalid end date" }),
+    venue: z.string().trim().optional(),
+    capacity: z.number().int().min(0).default(0),
+    price: z.number().min(0).default(0),
+    rules: z.string().trim().optional(),
+    isTeamEvent: z.boolean().default(false),
+    teamSizeMin: z.number().int().min(2).optional(),
+    teamSizeMax: z.number().int().min(2).optional(),
+    customForm: z.array(formFieldSchema).default([]),
+    status: z.enum(["draft", "published"]).default("draft"),
+});
 
-export const createEventSchema = z
-    .object({
-        title: z.string().min(3, "Title must be at least 3 characters").trim(),
-        description: z.string().trim().optional(),
-        coverImage: z.string().url().optional().or(z.literal("")),
-        type: z.enum(["inter", "intra"]),
-        category: z.string().min(1, "Category is required").toLowerCase().trim(),
-        departmentId: z.string().min(1, "Department is required"),
-        dateStart: z.string().datetime({ message: "Invalid start date" }),
-        dateEnd: z.string().datetime({ message: "Invalid end date" }),
-        venue: z.string().trim().optional(),
-        capacity: z.number().int().min(0).default(0),
-        price: z.number().min(0).default(0),
-        rules: z.string().trim().optional(),
-        isTeamEvent: z.boolean().default(false),
-        teamSizeMin: z.number().int().min(2).optional(),
-        teamSizeMax: z.number().int().min(2).optional(),
-        customForm: z.array(formFieldSchema).default([]),
-        status: z.enum(["draft", "published"]).default("draft"),
-    })
+export const createEventSchema = eventBaseSchema
     .refine(
         (d) => new Date(d.dateEnd) > new Date(d.dateStart),
         { message: "End date must be after start date", path: ["dateEnd"] }
@@ -105,11 +95,11 @@ export const createEventSchema = z
         { message: "Max team size must be >= min team size", path: ["teamSizeMax"] }
     );
 
-export const updateEventSchema = createEventSchema.partial().extend({
-    status: z.enum(["draft", "published", "cancelled"]).optional(),
-});
-
-// ─── Registration ─────────────────────────────────────────────────────────────
+export const updateEventSchema = eventBaseSchema
+    .partial()
+    .extend({
+        status: z.enum(["draft", "published", "cancelled"]).optional(),
+    });
 
 export const teamMemberSchema = z.object({
     name: z.string().min(2).trim(),
@@ -127,8 +117,6 @@ export const createRegistrationSchema = z.object({
     formResponses: z.array(formResponseSchema).default([]),
 });
 
-// ─── Types inferred from schemas ─────────────────────────────────────────────
-
 export type SignupInput = z.infer<typeof signupSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type AcceptInviteInput = z.infer<typeof acceptInviteSchema>;
@@ -136,4 +124,4 @@ export type SendInviteInput = z.infer<typeof sendInviteSchema>;
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 export type CreateRegistrationInput = z.infer<typeof createRegistrationSchema>;
-export type FormFieldInput = z.infer<typeof formFieldSchema>; 
+export type FormFieldInput = z.infer<typeof formFieldSchema>;
