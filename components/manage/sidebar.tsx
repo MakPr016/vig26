@@ -15,6 +15,7 @@ import {
     IconChevronRight,
     IconMenu2,
     IconX,
+    IconScan,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types";
@@ -37,6 +38,12 @@ const NAV_ITEMS: NavItem[] = [
         label: "Events",
         href: "/manage/events",
         icon: <IconCalendarEvent size={20} />,
+        roles: ["coordinator", "dept_admin", "super_admin"],
+    },
+    {
+        label: "Scanner",
+        href: "/manage/scan",
+        icon: <IconScan size={20} />,
         roles: ["coordinator", "dept_admin", "super_admin"],
     },
     {
@@ -106,7 +113,9 @@ export function ManageSidebar({ role }: ManageSidebarProps) {
 
             <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
                 {visibleItems.map((item) => {
-                    const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                    const isActive =
+                        pathname === item.href ||
+                        pathname.startsWith(item.href + "/");
                     return (
                         <Link
                             key={item.href}

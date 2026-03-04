@@ -36,7 +36,7 @@ function QRModal({ ticket, onClose }: { ticket: ITicket; onClose: () => void }) 
         <img
           src={qrUrl}
           alt="QR Code"
-          className="w-52 h-52 mx-auto rounded-xl border border-zinc-100"
+          className="w-52 h-52 mx-auto p-2.5 rounded-xl border border-zinc-100"
         />
 
         <div className="mt-4 space-y-1">
