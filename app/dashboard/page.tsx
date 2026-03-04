@@ -67,10 +67,16 @@ function QRModal({ ticket, onClose }: { ticket: ITicket; onClose: () => void }) 
 function TicketCard({ ticket, onQR }: { ticket: ITicket; onQR: () => void }) {
   const event = ticket.eventId as any;
   const isPast = event?.date?.end ? new Date(event.date.end) < new Date() : false;
+  const isCancelled = event?.status === "cancelled";
 
   return (
-    <div className={`bg-white rounded-2xl border overflow-hidden transition-all hover:shadow-md ${isPast ? "border-zinc-200 opacity-70" : "border-zinc-200"
-      }`}>
+    <div
+      className={`bg-white rounded-2xl border overflow-hidden transition-all ${
+        isCancelled
+          ? "border-red-200 bg-red-50/60"
+          : "hover:shadow-md border-zinc-200"
+      } ${isPast && !isCancelled ? "opacity-70" : ""}`}
+    >
       {/* Cover strip */}
       <div className="relative h-32 bg-zinc-100 overflow-hidden">
         {event?.coverImage ? (
@@ -80,9 +86,14 @@ function TicketCard({ ticket, onQR }: { ticket: ITicket; onQR: () => void }) {
             <IconTicket size={32} className="text-zinc-200" />
           </div>
         )}
-        {isPast && (
+        {isPast && !isCancelled && (
           <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
             <span className="text-white text-xs font-bold bg-black/50 px-2.5 py-1 rounded-full">Past Event</span>
+          </div>
+        )}
+        {isCancelled && (
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+            <span className="text-white text-xs font-bold bg-red-500 px-2.5 py-1 rounded-full">Cancelled</span>
           </div>
         )}
         <div className="absolute top-2.5 right-2.5">
@@ -124,11 +135,16 @@ function TicketCard({ ticket, onQR }: { ticket: ITicket; onQR: () => void }) {
         </div>
 
         <button
-          onClick={onQR}
-          className="mt-3 w-full flex items-center justify-center gap-2 py-2 bg-primary hover:bg-primary/80 text-white text-xs font-medium rounded-xl transition-colors"
+          onClick={() => { if (!isCancelled) onQR(); }}
+          disabled={isCancelled}
+          className={`mt-3 w-full flex items-center justify-center gap-2 py-2 text-xs font-medium rounded-xl transition-colors ${
+            isCancelled
+              ? "bg-zinc-200 text-zinc-500 cursor-not-allowed"
+              : "bg-primary hover:bg-primary/80 text-white"
+          }`}
         >
           <IconQrcode size={14} />
-          View QR Code
+          {isCancelled ? "Unavailable (Cancelled)" : "View QR Code"}
         </button>
       </div>
     </div>
@@ -169,6 +185,11 @@ function RegistrationRow({ reg }: { reg: IRegistration }) {
           }`}>
           {reg.status}
         </span>
+        {event?.status === "cancelled" && (
+          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-100">
+            Cancelled
+          </span>
+        )}
         {event?.slug && (
           <Link href={`/events/${event.slug}`} className="p-1 text-zinc-400 hover:text-zinc-700">
             <IconArrowUpRight size={14} />

@@ -134,7 +134,7 @@ export async function getMyRegistrations(): Promise<IRegistration[]> {
     await connectDB();
 
     const registrations = await Registration.find({ userId: session.user.id })
-        .populate("eventId", "title slug date venue coverImage category type")
+        .populate("eventId", "title slug date venue coverImage category type status")
         .sort({ createdAt: -1 })
         .lean();
 
@@ -146,7 +146,7 @@ export async function getMyTickets(): Promise<ITicket[]> {
     await connectDB();
 
     const tickets = await Ticket.find({ userId: session.user.id })
-        .populate("eventId", "title slug date venue coverImage category type")
+        .populate("eventId", "title slug date venue coverImage category type status")
         .populate("registrationId", "status paymentStatus")
         .sort({ createdAt: -1 })
         .lean();

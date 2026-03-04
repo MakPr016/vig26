@@ -11,6 +11,16 @@ import {
     IconDots, IconSend, IconCalendarEvent, IconDownload,
 } from "@tabler/icons-react";
 import type { IEvent } from "@/types";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const STATUS_TABS = ["all", "published", "draft", "cancelled"] as const;
 type StatusTab = typeof STATUS_TABS[number];
@@ -66,6 +76,11 @@ export default function ManageEventsPage() {
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [publishingId, setPublishingId] = useState<string | null>(null);
+    const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; eventId: string | null; title: string | null }>({
+        open: false,
+        eventId: null,
+        title: null,
+    });
 
     const filtered = events.filter((e) => {
         const matchesTab = activeTab === "all" || e.status === activeTab;
@@ -80,11 +95,16 @@ export default function ManageEventsPage() {
         cancelled: events.filter((e) => e.status === "cancelled").length,
     };
 
-    async function handleDelete(id: string) {
-        if (!confirm("Delete this event? This cannot be undone.")) return;
-        setDeletingId(id);
-        const result = await deleteEvent(id);
+    function openDeleteDialog(id: string, title: string) {
+        setDeleteDialog({ open: true, eventId: id, title });
+    }
+
+    async function handleDelete() {
+        if (!deleteDialog.eventId) return;
+        setDeletingId(deleteDialog.eventId);
+        const result = await deleteEvent(deleteDialog.eventId);
         setDeletingId(null);
+        setDeleteDialog({ open: false, eventId: null, title: null });
         if (result.success) {
             toast.success("Event deleted.");
             refetch();
@@ -292,12 +312,14 @@ export default function ManageEventsPage() {
                                                 )}
                                                 <div className="my-1 border-t border-zinc-100" />
                                                 <button
-                                                    onClick={() => { setOpenMenuId(null); handleDelete(event._id.toString()); }}
-                                                    disabled={deletingId === event._id.toString()}
-                                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-red-50 disabled:opacity-50"
+                                                    onClick={() => {
+                                                        setOpenMenuId(null);
+                                                        openDeleteDialog(event._id.toString(), event.title);
+                                                    }}
+                                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-red-50"
                                                 >
                                                     <IconTrash size={15} />
-                                                    {deletingId === event._id.toString() ? "Deleting…" : "Delete"}
+                                                    Delete
                                                 </button>
                                             </div>
                                         </>
@@ -308,6 +330,47 @@ export default function ManageEventsPage() {
                     </div>
                 )}
             </div>
+            <AlertDialog
+                open={deleteDialog.open}
+                onOpenChange={(open) =>
+                    setDeleteDialog((prev) => ({
+                        ...prev,
+                        open,
+                        ...(open ? {} : { eventId: null, title: null }),
+                    }))
+                }
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete this event?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {deleteDialog.title ? (
+                                <span>
+                                    You are about to delete <strong>{deleteDialog.title}</strong>. This action cannot be
+                                    undone and will remove all associated registrations.
+                                </span>
+                            ) : (
+                                "This action cannot be undone."
+                            )}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel
+                            disabled={deletingId === deleteDialog.eventId}
+                            onClick={() => setDeleteDialog({ open: false, eventId: null, title: null })}
+                        >
+                            Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            variant="destructive"
+                            onClick={handleDelete}
+                            disabled={!deleteDialog.eventId || deletingId === deleteDialog.eventId}
+                        >
+                            {deletingId === deleteDialog.eventId ? "Deleting…" : "Delete"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }
