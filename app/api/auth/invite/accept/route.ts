@@ -1,21 +1,19 @@
+// app/api/auth/invite/accept/route.ts
 import { connectDB } from "@/lib/db";
 import { User, Invite, Department } from "@/models";
 import { hashPassword, isExpired } from "@/lib/utils";
-import { acceptInviteSchema } from "@/lib/validations";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const parsed = acceptInviteSchema.safeParse(body);
+    const { token, password, confirmPassword } = body;
 
-    if (!parsed.success) {
+    if (!token) {
       return Response.json(
-        { success: false, error: parsed.error.issues[0].message },
+        { success: false, error: "Token is required." },
         { status: 400 }
       );
     }
-
-    const { token, password } = parsed.data;
 
     await connectDB();
 
@@ -36,10 +34,9 @@ export async function POST(req: Request) {
       );
     }
 
-    // ── Check if user already exists (edge case: same email invited twice) ─
+    // ── Check if user already exists ───────────────────────────────────────
     const existing = await User.findOne({ email: invite.email });
     if (existing) {
-      // Just mark invite accepted and add to department if not already in
       await Invite.findByIdAndUpdate(invite._id, { status: "accepted" });
       await Department.findByIdAndUpdate(invite.departmentId, {
         $addToSet: {
@@ -48,11 +45,46 @@ export async function POST(req: Request) {
       });
       await User.findByIdAndUpdate(existing._id, {
         $addToSet: { departments: invite.departmentId },
-        // Upgrade role if needed
         ...(invite.role === "dept_admin" ? { role: "dept_admin" } : {}),
       });
 
       return Response.json({ success: true, message: "Account linked to department." });
+    }
+
+    // ── New user: password is required ────────────────────────────────────
+    if (!password) {
+      return Response.json(
+        { success: false, error: "Password is required." },
+        { status: 400 }
+      );
+    }
+
+    if (password.length < 8) {
+      return Response.json(
+        { success: false, error: "Password must be at least 8 characters." },
+        { status: 400 }
+      );
+    }
+
+    if (!/[A-Z]/.test(password)) {
+      return Response.json(
+        { success: false, error: "Password must contain at least one uppercase letter." },
+        { status: 400 }
+      );
+    }
+
+    if (!/[0-9]/.test(password)) {
+      return Response.json(
+        { success: false, error: "Password must contain at least one number." },
+        { status: 400 }
+      );
+    }
+
+    if (password !== confirmPassword) {
+      return Response.json(
+        { success: false, error: "Passwords do not match." },
+        { status: 400 }
+      );
     }
 
     // ── Create new user account ────────────────────────────────────────────
@@ -67,14 +99,12 @@ export async function POST(req: Request) {
       registeredEvents: [],
     });
 
-    // ── Add user to department members ─────────────────────────────────────
     await Department.findByIdAndUpdate(invite.departmentId, {
       $push: {
         members: { userId: user._id, role: invite.role },
       },
     });
 
-    // ── Mark invite as accepted ────────────────────────────────────────────
     await Invite.findByIdAndUpdate(invite._id, { status: "accepted" });
 
     return Response.json(

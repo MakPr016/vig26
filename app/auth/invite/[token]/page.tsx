@@ -1,7 +1,7 @@
 // app/auth/invite/[token]/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { IconCircleCheck } from "@tabler/icons-react";
@@ -19,6 +19,58 @@ export default function AcceptInvitePage() {
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [done, setDone] = useState(false);
+
+    // Check if the invited email already has an account — if so, skip
+    // the password form and just accept the invite directly.
+    const [isExistingUser, setIsExistingUser] = useState(false);
+    const [checking, setChecking] = useState(true);
+
+    useEffect(() => {
+        if (!token) return;
+
+        async function checkInvite() {
+            try {
+                const res = await fetch(`/api/auth/invite/check?token=${token}`);
+                const data = await res.json();
+                if (data.userExists) {
+                    setIsExistingUser(true);
+                }
+            } catch {
+                // If the check fails, fall through to show the password form
+            } finally {
+                setChecking(false);
+            }
+        }
+
+        checkInvite();
+    }, [token]);
+
+    // For existing users: just hit the accept endpoint without a password,
+    // then redirect straight to sign-in.
+    useEffect(() => {
+        if (!isExistingUser || checking) return;
+
+        async function acceptForExistingUser() {
+            setLoading(true);
+            const res = await fetch("/api/auth/invite/accept", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ token }),
+            });
+            const data = await res.json();
+            setLoading(false);
+
+            if (!data.success) {
+                setError(data.error);
+                return;
+            }
+
+            setDone(true);
+            setTimeout(() => router.push("/manage/login"), 2000);
+        }
+
+        acceptForExistingUser();
+    }, [isExistingUser, checking, token, router]);
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -53,6 +105,16 @@ export default function AcceptInvitePage() {
         setTimeout(() => router.push("/manage/login"), 2000);
     }
 
+    if (checking || (isExistingUser && !error)) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-zinc-50 px-4">
+                <p className="text-sm text-zinc-500">
+                    {done ? "Redirecting you to sign in…" : "Verifying invite…"}
+                </p>
+            </div>
+        );
+    }
+
     if (done) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-zinc-50 px-4">
@@ -62,7 +124,7 @@ export default function AcceptInvitePage() {
                     </div>
                     <h1 className="text-xl font-bold text-zinc-900 mb-2">You&apos;re all set!</h1>
                     <p className="text-sm text-zinc-500">
-                        Your account has been created. Redirecting you to sign in…
+                        Your account has been updated. Redirecting you to sign in…
                     </p>
                 </div>
             </div>
