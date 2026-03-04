@@ -9,13 +9,137 @@ import { getManageEvents } from "@/actions/events";
 import { getEventRegistrations, toggleAttendance } from "@/actions/registrations";
 import { toast } from "sonner";
 import {
-    IconEdit, IconArrowLeft, IconCheck, IconX, IconDownload,
+    IconEdit, IconArrowLeft, IconDownload,
     IconCalendarEvent, IconMapPin, IconUsers, IconCurrencyRupee,
+    IconChevronDown,
 } from "@tabler/icons-react";
 import type { IEvent, IRegistration } from "@/types";
 import "@uiw/react-markdown-preview/markdown.css";
 
 const MDPreview = dynamic(() => import("@uiw/react-markdown-preview"), { ssr: false });
+
+// ─── CSV utility ──────────────────────────────────────────────────────────────
+
+function downloadCSV(filename: string, rows: string[][]) {
+    const csv = rows
+        .map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(","))
+        .join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// ─── Export: one row per registration (leader / solo) with form responses ─────
+
+function exportRegistrationsCSV(event: IEvent, registrations: any[]) {
+    const customFields = event.customForm ?? [];
+
+    const headers = [
+        "Registration ID",
+        "Name",
+        "Email",
+        "College ID",
+        "Registration Type",
+        "Team ID",
+        "Status",
+        "Payment Status",
+        "Registered At",
+        ...customFields.map((f) => f.label),
+    ];
+
+    const rows: string[][] = [headers];
+
+    for (const reg of registrations) {
+        const responseMap: Record<string, string> = {};
+        for (const r of reg.formResponses ?? []) {
+            responseMap[r.fieldId] = r.value ?? "";
+        }
+
+        rows.push([
+            reg._id,
+            reg.userId?.name ?? "—",
+            reg.userId?.email ?? "—",
+            reg.userId?.collegeId ?? "—",
+            reg.isTeamRegistration ? "Team" : "Individual",
+            reg.teamId ?? "—",
+            reg.status,
+            reg.paymentStatus,
+            new Date(reg.createdAt).toLocaleString("en-IN"),
+            ...customFields.map((f) => responseMap[f._id] ?? ""),
+        ]);
+    }
+
+    const safeName = event.title.replace(/[^a-z0-9]/gi, "-").toLowerCase();
+    downloadCSV(`${safeName}-registrations.csv`, rows);
+}
+
+// ─── Export: one row per participant (expands team members into individual rows) 
+
+function exportAllParticipantsCSV(event: IEvent, registrations: any[]) {
+    const customFields = event.customForm ?? [];
+
+    const headers = [
+        "Registration ID",
+        "Team ID",
+        "Role",
+        "Name",
+        "Email",
+        "College ID",
+        "Registration Status",
+        "Payment Status",
+        "Registered At",
+        ...customFields.map((f) => f.label),
+    ];
+
+    const rows: string[][] = [headers];
+
+    for (const reg of registrations) {
+        const responseMap: Record<string, string> = {};
+        for (const r of reg.formResponses ?? []) {
+            responseMap[r.fieldId] = r.value ?? "";
+        }
+        const formCells = customFields.map((f) => responseMap[f._id] ?? "");
+
+        // Leader / solo
+        rows.push([
+            reg._id,
+            reg.teamId ?? "—",
+            reg.isTeamRegistration ? "Leader" : "Solo",
+            reg.userId?.name ?? "—",
+            reg.userId?.email ?? "—",
+            reg.userId?.collegeId ?? "—",
+            reg.status,
+            reg.paymentStatus,
+            new Date(reg.createdAt).toLocaleString("en-IN"),
+            ...formCells,
+        ]);
+
+        // Team members
+        for (const member of reg.teamMembers ?? []) {
+            rows.push([
+                reg._id,
+                reg.teamId ?? "—",
+                "Member",
+                member.name ?? "—",
+                member.email ?? "—",
+                "—",            // team members may not have a college ID until they sign up
+                reg.status,
+                reg.paymentStatus,
+                new Date(reg.createdAt).toLocaleString("en-IN"),
+                ...formCells,  // form responses belong to the leader's registration
+            ]);
+        }
+    }
+
+    const safeName = event.title.replace(/[^a-z0-9]/gi, "-").toLowerCase();
+    downloadCSV(`${safeName}-all-participants.csv`, rows);
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ManageEventDetailPage() {
     const { id } = useParams<{ id: string }>();
@@ -26,6 +150,7 @@ export default function ManageEventDetailPage() {
     const [loading, setLoading] = useState(true);
     const [togglingId, setTogglingId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<"overview" | "registrations">("overview");
+    const [exportMenuOpen, setExportMenuOpen] = useState(false);
 
     useEffect(() => {
         async function load() {
@@ -53,34 +178,11 @@ export default function ManageEventDetailPage() {
         setTogglingId(null);
         if (result.success) {
             toast.success("Attendance updated.");
-            // Reload registrations
             const regsResult = await getEventRegistrations(id);
             if (regsResult.success) setRegistrations(regsResult.data as IRegistration[]);
         } else {
             toast.error(result.error ?? "Failed to update.");
         }
-    }
-
-    function exportCSV() {
-        if (!registrations.length) return;
-        const rows = [
-            ["Name", "Email", "College ID", "Status", "Payment", "Registered At"],
-            ...registrations.map((r: any) => [
-                r.userId?.name ?? "—",
-                r.userId?.email ?? "—",
-                r.userId?.collegeId ?? "—",
-                r.status,
-                r.paymentStatus,
-                new Date(r.createdAt).toLocaleString(),
-            ]),
-        ];
-        const csv = rows.map((row) => row.map((c) => `"${c}"`).join(",")).join("\n");
-        const blob = new Blob([csv], { type: "text/csv" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${event?.title ?? "registrations"}.csv`;
-        a.click();
     }
 
     if (loading) {
@@ -105,10 +207,14 @@ export default function ManageEventDetailPage() {
 
     const confirmed = registrations.filter((r: any) => r.status === "confirmed").length;
     const pending = registrations.filter((r: any) => r.status === "pending").length;
+    const hasTeams = (event as any).isTeamEvent;
+    const totalParticipants = (registrations as any[]).reduce((sum, r) => {
+        return sum + 1 + (r.teamMembers?.length ?? 0);
+    }, 0);
 
     return (
         <div className="space-y-5 max-w-4xl mx-auto">
-            {/* Breadcrumb */}
+            {/* Top bar */}
             <div className="flex items-center justify-between">
                 <button
                     onClick={() => router.back()}
@@ -126,7 +232,7 @@ export default function ManageEventDetailPage() {
                 </Link>
             </div>
 
-            {/* Event header */}
+            {/* Event header card */}
             <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
                 {event.coverImage && (
                     <div className="w-full h-48 overflow-hidden">
@@ -138,10 +244,11 @@ export default function ManageEventDetailPage() {
                         <div>
                             <h1 className="text-xl font-bold text-zinc-900">{event.title}</h1>
                             <div className="flex flex-wrap items-center gap-2 mt-2">
-                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${event.status === "published" ? "bg-green-50 text-green-700"
+                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                    event.status === "published" ? "bg-green-50 text-green-700"
                                         : event.status === "draft" ? "bg-zinc-100 text-zinc-600"
                                             : "bg-red-50 text-red-600"
-                                    }`}>{event.status}</span>
+                                }`}>{event.status}</span>
                                 <span className="text-xs px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 capitalize">{event.type}</span>
                                 <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 capitalize">{event.category}</span>
                             </div>
@@ -191,10 +298,11 @@ export default function ManageEventDetailPage() {
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
-                        className={`px-4 py-2.5 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${activeTab === tab
+                        className={`px-4 py-2.5 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${
+                            activeTab === tab
                                 ? "border-orange-500 text-orange-600"
                                 : "border-transparent text-zinc-500 hover:text-zinc-800"
-                            }`}
+                        }`}
                     >
                         {tab}
                         {tab === "registrations" && (
@@ -206,6 +314,7 @@ export default function ManageEventDetailPage() {
                 ))}
             </div>
 
+            {/* Overview tab */}
             {activeTab === "overview" && (
                 <div className="space-y-4">
                     {event.description && (
@@ -224,11 +333,11 @@ export default function ManageEventDetailPage() {
                             </div>
                         </div>
                     )}
-                    {event.isTeamEvent && event.teamSize && (
+                    {(event as any).isTeamEvent && (event as any).teamSize && (
                         <div className="bg-white rounded-xl border border-zinc-200 p-5">
                             <h3 className="text-sm font-semibold text-zinc-900 mb-2">Team Settings</h3>
                             <p className="text-sm text-zinc-600">
-                                Team size: {event.teamSize.min} – {event.teamSize.max} members
+                                Team size: {(event as any).teamSize.min} – {(event as any).teamSize.max} members
                             </p>
                         </div>
                     )}
@@ -253,25 +362,67 @@ export default function ManageEventDetailPage() {
                 </div>
             )}
 
+            {/* Registrations tab */}
             {activeTab === "registrations" && (
                 <div className="bg-white rounded-xl border border-zinc-200">
                     <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100">
                         <div className="flex items-center gap-4">
                             <p className="text-sm font-semibold text-zinc-900">
-                                {registrations.length} Registrations
+                                {registrations.length} Registration{registrations.length !== 1 ? "s" : ""}
                             </p>
                             <span className="text-xs text-zinc-400">
                                 {confirmed} confirmed · {pending} pending
+                                {hasTeams && totalParticipants !== registrations.length && (
+                                    <> · {totalParticipants} total participants</>
+                                )}
                             </span>
                         </div>
+
                         {registrations.length > 0 && (
-                            <button
-                                onClick={exportCSV}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 border border-zinc-200 rounded-lg hover:bg-zinc-50 transition-colors"
-                            >
-                                <IconDownload size={13} />
-                                Export CSV
-                            </button>
+                            <div className="relative">
+                                <button
+                                    onClick={() => setExportMenuOpen((v) => !v)}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 border border-zinc-200 rounded-lg hover:bg-zinc-50 transition-colors"
+                                >
+                                    <IconDownload size={13} />
+                                    Export CSV
+                                    <IconChevronDown size={12} className="text-zinc-400" />
+                                </button>
+
+                                {exportMenuOpen && (
+                                    <>
+                                        <div className="fixed inset-0 z-10" onClick={() => setExportMenuOpen(false)} />
+                                        <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-zinc-200 rounded-xl shadow-lg z-20 py-1 overflow-hidden">
+                                            <button
+                                                onClick={() => {
+                                                    exportRegistrationsCSV(event, registrations as any[]);
+                                                    setExportMenuOpen(false);
+                                                }}
+                                                className="w-full text-left px-4 py-2.5 text-sm text-zinc-700 hover:bg-zinc-50"
+                                            >
+                                                <p className="font-medium">Registrations</p>
+                                                <p className="text-xs text-zinc-400 mt-0.5">
+                                                    One row per registration · includes form responses
+                                                </p>
+                                            </button>
+                                            {hasTeams && (
+                                                <button
+                                                    onClick={() => {
+                                                        exportAllParticipantsCSV(event, registrations as any[]);
+                                                        setExportMenuOpen(false);
+                                                    }}
+                                                    className="w-full text-left px-4 py-2.5 text-sm text-zinc-700 hover:bg-zinc-50 border-t border-zinc-100"
+                                                >
+                                                    <p className="font-medium">All Participants</p>
+                                                    <p className="text-xs text-zinc-400 mt-0.5">
+                                                        One row per person · expands team members
+                                                    </p>
+                                                </button>
+                                            )}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
                         )}
                     </div>
 
@@ -286,9 +437,12 @@ export default function ManageEventDetailPage() {
                                     <tr className="border-b border-zinc-100 bg-zinc-50/50">
                                         <th className="text-left px-5 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Participant</th>
                                         <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">College ID</th>
+                                        {hasTeams && (
+                                            <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Team</th>
+                                        )}
                                         <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Status</th>
                                         <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Payment</th>
-                                        <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Attended</th>
+                                        <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Registered At</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-zinc-100">
@@ -297,24 +451,43 @@ export default function ManageEventDetailPage() {
                                             <td className="px-5 py-3.5">
                                                 <p className="font-medium text-zinc-900">{reg.userId?.name ?? "—"}</p>
                                                 <p className="text-xs text-zinc-400">{reg.userId?.email ?? "—"}</p>
+                                                {reg.isTeamRegistration && reg.teamMembers?.length > 0 && (
+                                                    <p className="text-xs text-zinc-400 mt-0.5">
+                                                        +{reg.teamMembers.length} teammate{reg.teamMembers.length !== 1 ? "s" : ""}
+                                                    </p>
+                                                )}
                                             </td>
-                                            <td className="px-4 py-3.5 text-zinc-600">{reg.userId?.collegeId ?? "—"}</td>
+                                            <td className="px-4 py-3.5 text-zinc-600 text-sm">{reg.userId?.collegeId ?? "—"}</td>
+                                            {hasTeams && (
+                                                <td className="px-4 py-3.5">
+                                                    {reg.isTeamRegistration ? (
+                                                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
+                                                            Leader
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-xs text-zinc-400">Solo</span>
+                                                    )}
+                                                </td>
+                                            )}
                                             <td className="px-4 py-3.5">
-                                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${reg.status === "confirmed" ? "bg-green-50 text-green-700"
+                                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                                    reg.status === "confirmed" ? "bg-green-50 text-green-700"
                                                         : reg.status === "pending" ? "bg-yellow-50 text-yellow-700"
                                                             : "bg-red-50 text-red-600"
-                                                    }`}>{reg.status}</span>
+                                                }`}>{reg.status}</span>
                                             </td>
                                             <td className="px-4 py-3.5">
-                                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${reg.paymentStatus === "completed" ? "bg-green-50 text-green-700"
+                                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                                    reg.paymentStatus === "completed" ? "bg-green-50 text-green-700"
                                                         : reg.paymentStatus === "na" ? "bg-zinc-100 text-zinc-500"
                                                             : reg.paymentStatus === "pending" ? "bg-yellow-50 text-yellow-700"
                                                                 : "bg-red-50 text-red-600"
-                                                    }`}>{reg.paymentStatus}</span>
+                                                }`}>{reg.paymentStatus}</span>
                                             </td>
-                                            <td className="px-4 py-3.5">
-                                                {/* Note: toggleAttendance is per-ticket, not registration */}
-                                                <span className="text-xs text-zinc-400">Via scanner</span>
+                                            <td className="px-4 py-3.5 text-xs text-zinc-400">
+                                                {new Date(reg.createdAt).toLocaleDateString("en-IN", {
+                                                    day: "numeric", month: "short", year: "numeric",
+                                                })}
                                             </td>
                                         </tr>
                                     ))}

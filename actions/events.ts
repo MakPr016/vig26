@@ -5,7 +5,6 @@ import { connectDB } from "@/lib/db";
 import { Event, Category } from "@/models";
 import { requireManagement, requireDepartmentAccess, requireSuperAdmin } from "@/lib/auth-helpers";
 import { createEventSchema, updateEventSchema } from "@/lib/validations";
-import { uploadFile } from "@/lib/cloudinary";
 import { serialize, getPaginationParams } from "@/lib/utils";
 import type { EventFilters, PaginatedResponse, IEvent } from "@/types";
 
@@ -88,17 +87,13 @@ export async function createEvent(formData: FormData) {
 
     const raw = Object.fromEntries(formData.entries());
 
-    const coverImageFile = formData.get("coverImageFile") as File | null;
-    let coverImage = raw.coverImage as string | undefined;
-
-    if (coverImageFile && coverImageFile.size > 0) {
-        const { url } = await uploadFile(coverImageFile, "event-covers");
-        coverImage = url;
-    }
+    // coverImage is now a Cloudinary URL string passed directly from the client
+    // (the client uploads via /api/upload first, then sets this field)
+    const coverImage = raw.coverImage as string | undefined;
 
     const parsed = createEventSchema.safeParse({
         ...raw,
-        coverImage,
+        coverImage: coverImage || undefined,
         dateStart: raw.dateStart ? new Date(raw.dateStart as string).toISOString() : undefined,
         dateEnd: raw.dateEnd ? new Date(raw.dateEnd as string).toISOString() : undefined,
         capacity: Number(raw.capacity ?? 0),
@@ -140,17 +135,12 @@ export async function updateEvent(id: string, formData: FormData) {
 
     const raw = Object.fromEntries(formData.entries());
 
-    const coverImageFile = formData.get("coverImageFile") as File | null;
-    let coverImage = raw.coverImage as string | undefined;
-
-    if (coverImageFile && coverImageFile.size > 0) {
-        const { url } = await uploadFile(coverImageFile, "event-covers");
-        coverImage = url;
-    }
+    // coverImage is now a Cloudinary URL string or empty string (meaning "remove")
+    const coverImage = raw.coverImage as string | undefined;
 
     const parsed = updateEventSchema.safeParse({
         ...raw,
-        coverImage,
+        coverImage: coverImage || undefined,
         dateStart: raw.dateStart ? new Date(raw.dateStart as string).toISOString() : undefined,
         dateEnd: raw.dateEnd ? new Date(raw.dateEnd as string).toISOString() : undefined,
         capacity: raw.capacity !== undefined ? Number(raw.capacity) : undefined,
@@ -168,6 +158,12 @@ export async function updateEvent(id: string, formData: FormData) {
     const { departmentId, dateStart, dateEnd, teamSizeMin, teamSizeMax, ...rest } = parsed.data;
 
     const updates: Record<string, unknown> = { ...rest };
+
+    // Explicitly handle coverImage removal: if raw had coverImage key but it's empty, unset it
+    if ("coverImage" in raw && !raw.coverImage) {
+        updates.coverImage = null;
+    }
+
     if (departmentId) updates.department = departmentId;
     if (dateStart || dateEnd) {
         updates.date = {

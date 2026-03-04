@@ -9,12 +9,13 @@ import { getManageEvents, updateEvent, getCategories } from "@/actions/events";
 import { getDepartments } from "@/actions/admin";
 import { toast } from "sonner";
 import {
-    IconPlus, IconTrash, IconGripVertical, IconUpload,
+    IconPlus, IconTrash, IconGripVertical,
     IconChevronDown, IconChevronUp, IconArrowLeft,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ImageUpload } from "@/components/manage/image-upload";
 import type { IFormField, FormFieldType, IEvent } from "@/types";
 import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
@@ -166,7 +167,8 @@ export default function EditEventPage() {
     const [categories, setCategories] = useState<string[]>([]);
     const [departments, setDepartments] = useState<{ _id: string; name: string }[]>([]);
     const [selectedDeptId, setSelectedDeptId] = useState("");
-    const [coverPreview, setCoverPreview] = useState<string | null>(null);
+    // coverImageUrl holds the Cloudinary URL (pre-existing from DB, or freshly uploaded)
+    const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
     const [description, setDescription] = useState("");
     const [rules, setRules] = useState("");
     const [formFields, setFormFields] = useState<IFormField[]>([]);
@@ -192,7 +194,8 @@ export default function EditEventPage() {
                 setIsTeamEvent(found.isTeamEvent);
                 setTeamSizeMin(found.teamSize?.min ?? 2);
                 setTeamSizeMax(found.teamSize?.max ?? 5);
-                setCoverPreview(found.coverImage ?? null);
+                // Load existing cover image URL from DB into state
+                setCoverImageUrl(found.coverImage ?? null);
                 setDescription(found.description ?? "");
                 setRules(found.rules ?? "");
                 setSelectedDeptId(
@@ -246,6 +249,9 @@ export default function EditEventPage() {
         formData.set("rules", rules);
         formData.set("departmentId", selectedDeptId);
         formData.set("customForm", JSON.stringify(formFields.map((f, i) => ({ ...f, order: i }))));
+
+        // Pass current Cloudinary URL (or empty string to signal removal)
+        formData.set("coverImage", coverImageUrl ?? "");
 
         if (isTeamEvent) {
             formData.set("teamSizeMin", String(teamSizeMin));
@@ -362,35 +368,18 @@ export default function EditEventPage() {
 
                             <div>
                                 <Label>Cover Image</Label>
-                                <div className="mt-1">
-                                    {coverPreview ? (
-                                        <div className="relative w-full h-40 rounded-xl overflow-hidden border border-zinc-200">
-                                            <img src={coverPreview} alt="" className="w-full h-full object-cover" />
-                                            <button
-                                                type="button"
-                                                onClick={() => setCoverPreview(null)}
-                                                className="absolute top-2 right-2 p-1.5 bg-white rounded-lg border shadow-sm text-zinc-500 hover:text-red-500"
-                                            >
-                                                <IconTrash size={14} />
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-zinc-200 rounded-xl cursor-pointer hover:border-orange-300 hover:bg-orange-50/30 transition-colors">
-                                            <IconUpload size={20} className="text-zinc-300 mb-2" />
-                                            <span className="text-sm text-zinc-400">Click to upload new cover</span>
-                                            <input
-                                                type="file"
-                                                name="coverImageFile"
-                                                accept="image/*"
-                                                className="hidden"
-                                                onChange={(e) => {
-                                                    const f = e.target.files?.[0];
-                                                    if (f) setCoverPreview(URL.createObjectURL(f));
-                                                }}
-                                            />
-                                        </label>
-                                    )}
-                                </div>
+                                <p className="text-xs text-zinc-400 mt-0.5 mb-1.5">
+                                    Uploaded directly to Cloudinary. JPEG, PNG, WebP · Max 5MB.
+                                </p>
+                                {/* ImageUpload is pre-seeded with the existing DB URL.
+                                    New uploads go to Cloudinary first, then the URL is stored in state. */}
+                                <ImageUpload
+                                    value={coverImageUrl}
+                                    onChange={setCoverImageUrl}
+                                    folder="event-covers"
+                                    label="Click or drag to upload new cover"
+                                    height="h-44"
+                                />
                             </div>
                         </div>
                     )}
@@ -407,7 +396,7 @@ export default function EditEventPage() {
                                         id="type"
                                         name="type"
                                         defaultValue={event.type}
-                                        className="mt-1 w-full h-9 text-sm border border-zinc-200 rounded-lg px-3 bg-white focus:outline-none"
+                                        className="mt-1 w-full h-9 text-sm border border-zinc-200 rounded-lg px-3 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20"
                                     >
                                         <option value="inter">Inter College</option>
                                         <option value="intra">Intra College</option>
@@ -419,7 +408,7 @@ export default function EditEventPage() {
                                         id="category"
                                         name="category"
                                         defaultValue={event.category}
-                                        className="mt-1 w-full h-9 text-sm border border-zinc-200 rounded-lg px-3 bg-white focus:outline-none"
+                                        className="mt-1 w-full h-9 text-sm capitalize border border-zinc-200 rounded-lg px-3 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20"
                                     >
                                         {categories.map((c) => (
                                             <option key={c} value={c} className="capitalize">{c}</option>
@@ -430,22 +419,22 @@ export default function EditEventPage() {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <Label htmlFor="dateStart">Start</Label>
+                                    <Label htmlFor="dateStart">Start Date & Time</Label>
                                     <Input
                                         id="dateStart"
                                         name="dateStart"
                                         type="datetime-local"
-                                        defaultValue={toDatetimeLocal(event.date.start)}
+                                        defaultValue={toDatetimeLocal(event.date?.start)}
                                         className="mt-1"
                                     />
                                 </div>
                                 <div>
-                                    <Label htmlFor="dateEnd">End</Label>
+                                    <Label htmlFor="dateEnd">End Date & Time</Label>
                                     <Input
                                         id="dateEnd"
                                         name="dateEnd"
                                         type="datetime-local"
-                                        defaultValue={toDatetimeLocal(event.date.end)}
+                                        defaultValue={toDatetimeLocal(event.date?.end)}
                                         className="mt-1"
                                     />
                                 </div>
@@ -453,25 +442,27 @@ export default function EditEventPage() {
 
                             <div>
                                 <Label htmlFor="venue">Venue</Label>
-                                <Input id="venue" name="venue" defaultValue={event.venue ?? ""} className="mt-1" />
+                                <Input
+                                    id="venue"
+                                    name="venue"
+                                    defaultValue={event.venue ?? ""}
+                                    placeholder="e.g. Main Auditorium or Zoom link"
+                                    className="mt-1"
+                                />
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <Label htmlFor="capacity">
-                                        Capacity{isTeamEvent ? " (teams)" : ""}
-                                    </Label>
+                                    <Label htmlFor="capacity">Capacity</Label>
                                     <Input
                                         id="capacity"
                                         name="capacity"
                                         type="number"
                                         min="0"
-                                        defaultValue={event.capacity}
+                                        defaultValue={event.capacity ?? 0}
                                         className="mt-1"
                                     />
-                                    <p className="text-xs text-zinc-400 mt-1">
-                                        {isTeamEvent ? "Max teams. 0 = unlimited." : "0 = unlimited."}
-                                    </p>
+                                    <p className="text-xs text-zinc-400 mt-1">0 = unlimited.</p>
                                 </div>
                                 <div>
                                     <Label htmlFor="price">Price (₹)</Label>
@@ -480,9 +471,10 @@ export default function EditEventPage() {
                                         name="price"
                                         type="number"
                                         min="0"
-                                        defaultValue={event.price}
+                                        defaultValue={event.price ?? 0}
                                         className="mt-1"
                                     />
+                                    <p className="text-xs text-zinc-400 mt-1">0 = free event.</p>
                                 </div>
                             </div>
                         </div>
@@ -516,54 +508,37 @@ export default function EditEventPage() {
                                     onChange={(e) => setIsTeamEvent(e.target.checked)}
                                     className="w-4 h-4 accent-orange-500"
                                 />
-                                <span className="text-sm font-medium text-zinc-900">Team Event</span>
+                                <div>
+                                    <p className="text-sm font-medium text-zinc-900">Team Event</p>
+                                    <p className="text-xs text-zinc-400">Enable team registration</p>
+                                </div>
                             </label>
 
                             {isTeamEvent && (
-                                <div className="pl-7 space-y-4">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <Label htmlFor="teamSizeMinInput">Min Team Size</Label>
-                                            <Input
-                                                id="teamSizeMinInput"
-                                                type="number"
-                                                min="2"
-                                                max={teamSizeMax}
-                                                value={teamSizeMin}
-                                                onChange={(e) => {
-                                                    const v = Math.max(2, Number(e.target.value));
-                                                    setTeamSizeMin(v);
-                                                    if (v > teamSizeMax) setTeamSizeMax(v);
-                                                }}
-                                                className="mt-1"
-                                            />
-                                        </div>
-                                        <div>
-                                            <Label htmlFor="teamSizeMaxInput">Max Team Size</Label>
-                                            <Input
-                                                id="teamSizeMaxInput"
-                                                type="number"
-                                                min={teamSizeMin}
-                                                value={teamSizeMax}
-                                                onChange={(e) => {
-                                                    const v = Math.max(teamSizeMin, Number(e.target.value));
-                                                    setTeamSizeMax(v);
-                                                }}
-                                                className="mt-1"
-                                            />
-                                        </div>
+                                <div className="pl-7 grid grid-cols-2 gap-4">
+                                    <div>
+                                        <Label>Min Team Size</Label>
+                                        <Input
+                                            type="number"
+                                            min="2"
+                                            value={teamSizeMin}
+                                            onChange={(e) => {
+                                                const v = Math.max(2, Number(e.target.value));
+                                                setTeamSizeMin(v);
+                                                if (v > teamSizeMax) setTeamSizeMax(v);
+                                            }}
+                                            className="mt-1"
+                                        />
                                     </div>
-
-                                    <div className="bg-orange-50 border border-orange-100 rounded-lg px-4 py-3">
-                                        <p className="text-xs font-medium text-orange-700 mb-1">How team registration works</p>
-                                        <p className="text-xs text-orange-600">
-                                            The team leader registers and enters{" "}
-                                            {teamSizeMin - 1 === teamSizeMax - 1
-                                                ? `exactly ${teamSizeMin - 1}`
-                                                : `${teamSizeMin - 1}–${teamSizeMax - 1}`}{" "}
-                                            teammate{teamSizeMax - 1 !== 1 ? "s" : ""} (name + email).
-                                            Capacity counts teams, not individuals.
-                                        </p>
+                                    <div>
+                                        <Label>Max Team Size</Label>
+                                        <Input
+                                            type="number"
+                                            min={teamSizeMin}
+                                            value={teamSizeMax}
+                                            onChange={(e) => setTeamSizeMax(Math.max(teamSizeMin, Number(e.target.value)))}
+                                            className="mt-1"
+                                        />
                                     </div>
                                 </div>
                             )}

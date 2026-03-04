@@ -8,11 +8,56 @@ import { deleteEvent, publishEvent } from "@/actions/events";
 import { toast } from "sonner";
 import {
     IconPlus, IconSearch, IconEdit, IconTrash, IconEye,
-    IconDots, IconSend, IconCalendarEvent,
+    IconDots, IconSend, IconCalendarEvent, IconDownload,
 } from "@tabler/icons-react";
+import type { IEvent } from "@/types";
 
 const STATUS_TABS = ["all", "published", "draft", "cancelled"] as const;
 type StatusTab = typeof STATUS_TABS[number];
+
+function downloadCSV(filename: string, rows: string[][]) {
+    const csv = rows
+        .map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(","))
+        .join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" }); // BOM for Excel
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function exportEventsCSV(events: IEvent[]) {
+    if (!events.length) return;
+
+    const rows: string[][] = [
+        ["Title", "Type", "Category", "Status", "Department", "Date (Start)", "Date (End)", "Venue", "Price (₹)", "Capacity", "Registrations", "Remaining Slots"],
+    ];
+
+    for (const e of events) {
+        const dept = typeof e.department === "object" ? (e.department as any)?.name : e.department;
+        const capacity = e.capacity === 0 ? "Unlimited" : String(e.capacity);
+        const remaining = e.capacity === 0 ? "Unlimited" : String(Math.max(0, e.capacity - e.registrationCount));
+
+        rows.push([
+            e.title,
+            e.type,
+            e.category,
+            e.status,
+            dept ?? "—",
+            e.date?.start ? new Date(e.date.start).toLocaleString("en-IN") : "—",
+            e.date?.end ? new Date(e.date.end).toLocaleString("en-IN") : "—",
+            e.venue ?? "—",
+            e.price === 0 ? "Free" : String(e.price),
+            capacity,
+            String(e.registrationCount ?? 0),
+            remaining,
+        ]);
+    }
+
+    downloadCSV(`vigyanrang-events-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+}
 
 export default function ManageEventsPage() {
     const { events, loading, error, refetch } = useManageEvents();
@@ -68,13 +113,25 @@ export default function ManageEventsPage() {
                     <h1 className="text-2xl font-bold text-zinc-900">Events</h1>
                     <p className="text-sm text-zinc-500 mt-0.5">Manage your department&apos;s events.</p>
                 </div>
-                <Link
-                    href="/manage/events/new"
-                    className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/80 text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                    <IconPlus size={16} />
-                    New Event
-                </Link>
+                <div className="flex items-center gap-2">
+                    {filtered.length > 0 && !loading && (
+                        <button
+                            onClick={() => exportEventsCSV(filtered)}
+                            className="flex items-center gap-2 px-3 py-2 border border-zinc-200 text-zinc-600 hover:bg-zinc-50 text-sm font-medium rounded-lg transition-colors"
+                            title={`Export ${filtered.length} event${filtered.length !== 1 ? "s" : ""} as CSV`}
+                        >
+                            <IconDownload size={15} />
+                            Export{activeTab !== "all" ? ` ${activeTab}` : ""} ({filtered.length})
+                        </button>
+                    )}
+                    <Link
+                        href="/manage/events/new"
+                        className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/80 text-white text-sm font-medium rounded-lg transition-colors"
+                    >
+                        <IconPlus size={16} />
+                        New Event
+                    </Link>
+                </div>
             </div>
 
             {/* Search + Tabs */}
@@ -98,14 +155,16 @@ export default function ManageEventsPage() {
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
-                            className={`px-3 py-2.5 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${activeTab === tab
+                            className={`px-3 py-2.5 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${
+                                activeTab === tab
                                     ? "border-orange-500 text-orange-600"
                                     : "border-transparent text-zinc-500 hover:text-zinc-800"
-                                }`}
+                            }`}
                         >
                             {tab}
-                            <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${activeTab === tab ? "bg-orange-100 text-orange-600" : "bg-zinc-100 text-zinc-500"
-                                }`}>
+                            <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${
+                                activeTab === tab ? "bg-orange-100 text-orange-600" : "bg-zinc-100 text-zinc-500"
+                            }`}>
                                 {counts[tab]}
                             </span>
                         </button>
@@ -183,12 +242,13 @@ export default function ManageEventsPage() {
                                 </div>
 
                                 {/* Status badge */}
-                                <span className={`hidden sm:inline-flex text-xs font-medium px-2.5 py-1 rounded-full shrink-0 ${event.status === "published"
+                                <span className={`hidden sm:inline-flex text-xs font-medium px-2.5 py-1 rounded-full shrink-0 ${
+                                    event.status === "published"
                                         ? "bg-green-50 text-green-700"
                                         : event.status === "draft"
                                             ? "bg-zinc-100 text-zinc-600"
                                             : "bg-red-50 text-red-600"
-                                    }`}>
+                                }`}>
                                     {event.status}
                                 </span>
 

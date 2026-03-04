@@ -9,12 +9,13 @@ import { createEvent, getCategories } from "@/actions/events";
 import { getDepartments } from "@/actions/admin";
 import { toast } from "sonner";
 import {
-    IconPlus, IconTrash, IconGripVertical, IconUpload,
+    IconPlus, IconTrash, IconGripVertical,
     IconChevronDown, IconChevronUp,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ImageUpload } from "@/components/manage/image-upload";
 import type { IFormField, FormFieldType } from "@/types";
 import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
@@ -43,8 +44,8 @@ function FormFieldRow({
 }: {
     field: IFormField;
     index: number;
-    onUpdate: (index: number, updates: Partial<IFormField>) => void;
-    onRemove: (index: number) => void;
+    onUpdate: (i: number, u: Partial<IFormField>) => void;
+    onRemove: (i: number) => void;
 }) {
     const [optionInput, setOptionInput] = useState("");
 
@@ -54,13 +55,12 @@ function FormFieldRow({
                 <div className="mt-1 text-zinc-300 cursor-grab">
                     <IconGripVertical size={18} />
                 </div>
-                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex-1 grid grid-cols-2 gap-3">
                     <div>
-                        <Label className="text-xs mb-1">Field Label</Label>
+                        <Label className="text-xs mb-1">Label</Label>
                         <Input
                             value={field.label}
                             onChange={(e) => onUpdate(index, { label: e.target.value })}
-                            placeholder="e.g. Team Name"
                             className="h-8 text-sm"
                         />
                     </div>
@@ -69,7 +69,7 @@ function FormFieldRow({
                         <select
                             value={field.type}
                             onChange={(e) => onUpdate(index, { type: e.target.value as FormFieldType })}
-                            className="w-full h-8 text-sm border border-zinc-200 rounded-lg px-2 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                            className="w-full h-8 text-sm border border-zinc-200 rounded-lg px-2 bg-white focus:outline-none"
                         >
                             {FIELD_TYPES.map((t) => (
                                 <option key={t.value} value={t.value}>{t.label}</option>
@@ -81,11 +81,10 @@ function FormFieldRow({
                         <Input
                             value={field.placeholder ?? ""}
                             onChange={(e) => onUpdate(index, { placeholder: e.target.value })}
-                            placeholder="Optional placeholder text"
                             className="h-8 text-sm"
                         />
                     </div>
-                    <div className="flex items-end gap-3">
+                    <div className="flex items-end">
                         <label className="flex items-center gap-2 cursor-pointer">
                             <input
                                 type="checkbox"
@@ -108,7 +107,6 @@ function FormFieldRow({
 
             {field.type === "dropdown" && (
                 <div className="ml-6">
-                    <Label className="text-xs mb-1">Options</Label>
                     <div className="flex flex-wrap gap-1.5 mb-2">
                         {(field.options ?? []).map((opt, i) => (
                             <span key={i} className="flex items-center gap-1 px-2 py-0.5 bg-white border border-zinc-200 rounded-full text-xs">
@@ -118,7 +116,7 @@ function FormFieldRow({
                                     onClick={() => onUpdate(index, {
                                         options: field.options?.filter((_, oi) => oi !== i),
                                     })}
-                                    className="text-zinc-400 hover:text-red-500 ml-0.5"
+                                    className="text-zinc-400 hover:text-red-500"
                                 >
                                     ×
                                 </button>
@@ -173,7 +171,8 @@ export default function NewEventPage() {
     const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
     const [departments, setDepartments] = useState<{ _id: string; name: string }[]>([]);
     const [selectedDeptId, setSelectedDeptId] = useState("");
-    const [coverPreview, setCoverPreview] = useState<string | null>(null);
+    // coverImageUrl holds the Cloudinary URL after upload (or null)
+    const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
     const [description, setDescription] = useState("");
     const [rules, setRules] = useState("");
     const [formFields, setFormFields] = useState<IFormField[]>([]);
@@ -242,6 +241,11 @@ export default function NewEventPage() {
         formData.set("rules", rules);
         formData.set("departmentId", selectedDeptId);
         formData.set("customForm", JSON.stringify(formFields.map((f, i) => ({ ...f, order: i }))));
+
+        // Pass the already-uploaded Cloudinary URL as a plain string
+        if (coverImageUrl) {
+            formData.set("coverImage", coverImageUrl);
+        }
 
         if (isTeamEvent) {
             formData.set("teamSizeMin", String(teamSizeMin));
@@ -352,35 +356,16 @@ export default function NewEventPage() {
 
                             <div>
                                 <Label>Cover Image</Label>
-                                <div className="mt-1">
-                                    {coverPreview ? (
-                                        <div className="relative w-full h-40 rounded-xl overflow-hidden border border-zinc-200">
-                                            <img src={coverPreview} alt="" className="w-full h-full object-cover" />
-                                            <button
-                                                type="button"
-                                                onClick={() => setCoverPreview(null)}
-                                                className="absolute top-2 right-2 p-1.5 bg-white rounded-lg border border-zinc-200 text-zinc-500 hover:text-red-500 shadow-sm"
-                                            >
-                                                <IconTrash size={14} />
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-zinc-200 rounded-xl cursor-pointer hover:border-orange-300 hover:bg-orange-50/30 transition-colors">
-                                            <IconUpload size={20} className="text-zinc-300 mb-2" />
-                                            <span className="text-sm text-zinc-400">Click to upload cover image</span>
-                                            <input
-                                                type="file"
-                                                name="coverImageFile"
-                                                accept="image/*"
-                                                className="hidden"
-                                                onChange={(e) => {
-                                                    const file = e.target.files?.[0];
-                                                    if (file) setCoverPreview(URL.createObjectURL(file));
-                                                }}
-                                            />
-                                        </label>
-                                    )}
-                                </div>
+                                <p className="text-xs text-zinc-400 mt-0.5 mb-1.5">
+                                    Uploaded directly to Cloudinary. JPEG, PNG, WebP · Max 5MB.
+                                </p>
+                                <ImageUpload
+                                    value={coverImageUrl}
+                                    onChange={setCoverImageUrl}
+                                    folder="event-covers"
+                                    label="Click or drag to upload cover image"
+                                    height="h-44"
+                                />
                             </div>
                         </div>
                     )}
