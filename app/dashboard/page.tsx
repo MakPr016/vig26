@@ -99,7 +99,7 @@ export default function DashboardPage() {
         <div className="flex items-center gap-3">
           <span className="text-sm text-zinc-500">Temporary Dashboard</span>
           <Button asChild size="sm" variant="outline">
-            <Link href="/manage/login">Manage →</Link>
+            <Link href="/manage">Manage →</Link>
           </Button>
         </div>
       </header>

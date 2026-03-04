@@ -124,3 +124,8 @@
     @apply bg-background text-foreground;
   }
 }
+
+[data-sonner-toast] [data-description] {
+  color: var(--popover-foreground) !important;
+  opacity: 0.75 !important;
+}

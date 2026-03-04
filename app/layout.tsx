@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, DM_Sans } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+import { Toaster } from "@/components/ui/sonner";
+import { Suspense } from "react";
+import { UnauthorizedToast } from "@/components/unauthorized-toast";
 
 const dmSans = DM_Sans({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -33,6 +36,10 @@ export default function RootLayout({
         <Providers>
           {children}
         </Providers>
+        <Suspense>
+          <UnauthorizedToast />
+        </Suspense>
+        <Toaster />
       </body>
     </html>
   );
