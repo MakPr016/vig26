@@ -159,7 +159,7 @@ export async function POST(req: Request) {
                 await Ticket.create({
                     registrationId: registration._id,
                     eventId: parsed.data.eventId,
-                    userId: memberUser?._id ?? undefined,
+                    ...(memberUser ? { userId: memberUser._id } : {}),
                     qrCode: memberQR,
                     teamRole: "member",
                     teamId,

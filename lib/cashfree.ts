@@ -2,14 +2,23 @@
 // Server-side Cashfree Payments API helper (REST, no SDK dependency)
 
 const BASE_URL =
-    process.env.NODE_ENV === "production"
+    process.env.CASHFREE_ENV === "production"
         ? "https://api.cashfree.com/pg"
         : "https://sandbox.cashfree.com/pg";
 
 function getHeaders() {
+    const appId = process.env.NEXT_PUBLIC_CASHFREE_APP_ID;
+    const secretKey = process.env.CASHFREE_SECRET_KEY;
+
+    if (!appId || !secretKey) {
+        throw new Error(
+            `Cashfree credentials missing — NEXT_PUBLIC_CASHFREE_APP_ID: ${appId ? "set" : "MISSING"}, CASHFREE_SECRET_KEY: ${secretKey ? "set" : "MISSING"}. Restart the dev server after adding them to .env.local.`
+        );
+    }
+
     return {
-        "x-client-id": process.env.NEXT_PUBLIC_CASHFREE_APP_ID!,
-        "x-client-secret": process.env.CASHFREE_SECRET_KEY!,
+        "x-client-id": appId,
+        "x-client-secret": secretKey,
         "x-api-version": "2023-08-01",
         "Content-Type": "application/json",
     };
@@ -43,7 +52,10 @@ export async function createCashfreeOrder(params: {
         }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.message ?? "Failed to create Cashfree order");
+    if (!res.ok) {
+        console.error("[cashfree] createOrder failed:", JSON.stringify(data));
+        throw new Error(data.message ?? "Failed to create Cashfree order");
+    }
     return data;
 }
 

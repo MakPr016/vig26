@@ -452,7 +452,7 @@ export default function RegisterPage() {
 
         // Open Cashfree checkout modal (UPI only)
         const cashfree = window.Cashfree({
-            mode: process.env.NODE_ENV === "production" ? "production" : "sandbox",
+            mode: process.env.NEXT_PUBLIC_CASHFREE_ENV === "production" ? "production" : "sandbox",
         });
 
         const result = await cashfree.checkout({
