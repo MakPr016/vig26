@@ -100,7 +100,7 @@ export function PublicNavbar() {
                             href="/account"
                             className={[
                                 "flex items-center gap-2 no-underline",
-                                "pl-1 pr-3 py-1 rounded-full border transition-all duration-200",
+                                "pl-1 pr-1 sm:pr-3 py-1 rounded-full border transition-all duration-200",
                                 isDark
                                     ? "border-white/15 hover:border-orange-500/50 hover:bg-orange-500/8"
                                     : "border-zinc-200 hover:border-orange-400/60 hover:bg-orange-50",
@@ -117,7 +117,7 @@ export function PublicNavbar() {
                             </span>
                         </Link>
                     ) : (
-                        <div className="flex items-center gap-2">
+                        <div className="hidden sm:flex items-center gap-2">
                             <Link
                                 href="/auth/login"
                                 className={[
@@ -146,6 +146,10 @@ export function PublicNavbar() {
                     >
                         <span className={[
                             "block w-6 h-[1.5px] rounded-sm transition-all duration-300",
+                            isDark ? "bg-white" : "bg-zinc-800",
+                        ].join(" ")} />
+                        <span className={[
+                            "block w-6 h-[1.5px] rounded-sm transition-all duration-300 group-hover:w-4",
                             isDark ? "bg-white" : "bg-zinc-800",
                         ].join(" ")} />
                         <span className={[
