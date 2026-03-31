@@ -182,26 +182,31 @@ export function ScheduleSection() {
                 </svg>
               </button>
 
-              {expandedDay === day && (
-                <div className="border-t border-white/10 relative">
-                  <div className="absolute left-6 top-0 bottom-0 w-px bg-orange-500/30" />
-                  <div className="pl-12 pr-6 py-5 space-y-5">
-                    {events.map((event, idx) => (
-                      <div key={idx} className="flex flex-col gap-0.5">
-                        <div className="text-xs text-orange-500 font-light uppercase tracking-wider">
-                          {event.time}
+              <div
+                className="grid transition-all duration-300 ease-in-out"
+                style={{ gridTemplateRows: expandedDay === day ? '1fr' : '0fr' }}
+              >
+                <div className="overflow-hidden">
+                  <div className="border-t border-white/10 relative">
+                    <div className="absolute left-6 top-0 bottom-0 w-px bg-orange-500/30" />
+                    <div className="pl-12 pr-6 py-5 space-y-5">
+                      {events.map((event, idx) => (
+                        <div key={idx} className="flex flex-col gap-0.5">
+                          <div className="text-xs text-orange-500 font-light uppercase tracking-wider">
+                            {event.time}
+                          </div>
+                          <div className="text-sm text-white font-light">
+                            {event.name}
+                          </div>
+                          <div className="text-xs text-zinc-400">
+                            {event.venue}
+                          </div>
                         </div>
-                        <div className="text-sm text-white font-light">
-                          {event.name}
-                        </div>
-                        <div className="text-xs text-zinc-400">
-                          {event.venue}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 </div>
-              )}
+              </div>
             </div>
           ))}
         </div>

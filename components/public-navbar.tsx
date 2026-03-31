@@ -64,8 +64,11 @@ export function PublicNavbar() {
         tl.current?.reverse().then(() => setIsOpen(false));
     }
 
+    const role = (session?.user as { role?: string })?.role;
+    const isManagement = role === "coordinator" || role === "dept_admin" || role === "super_admin";
+
     const visibleLinks = NAV_LINKS.filter((l) => !l.authRequired || !!session);
-    const signOutIndex = String(visibleLinks.length + 1).padStart(2, "0");
+    const signOutIndex = String(visibleLinks.length + (isManagement ? 2 : 1)).padStart(2, "0");
 
     return (
         <div ref={container} className="relative z-100">
@@ -205,6 +208,31 @@ export function PublicNavbar() {
                                 </div>
                             </div>
                         ))}
+
+                        {/* Management Dashboard — management roles only */}
+                        {isManagement && (
+                            <div className="vr-link-clip overflow-hidden border-b border-white/5">
+                                <div className="vr-link-inner">
+                                    <Link
+                                        href="/manage/dashboard"
+                                        onClick={closeMenu}
+                                        className="group flex items-center gap-5 w-full py-2.5 no-underline text-white/85 transition-colors duration-200"
+                                    >
+                                        <span className="text-[0.6rem] text-white/18 font-medium tracking-widest w-8 shrink-0 pt-1">
+                                            {String(visibleLinks.length + 1).padStart(2, "0")}
+                                        </span>
+                                        <span className="text-[clamp(1.9rem,4.5vw,3.4rem)] font-light tracking-[-0.03em] leading-none transition-colors duration-200 group-hover:text-orange-500">
+                                            Management
+                                        </span>
+                                        <IconArrowUpRight
+                                            size={26}
+                                            strokeWidth={1.5}
+                                            className="ml-auto text-orange-500 opacity-0 shrink-0 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-1 group-hover:-translate-y-1"
+                                        />
+                                    </Link>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Sign in / Sign out */}
                         <div className="vr-link-clip overflow-hidden border-b border-white/5">
