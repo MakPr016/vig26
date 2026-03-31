@@ -7,7 +7,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { getEventBySlug } from "@/actions/events";
 import { createRegistration } from "@/actions/registrations";
-import { Navbar } from "@/components/navbar";
+// import { Navbar } from "@/components/navbar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -508,7 +508,8 @@ export default function RegisterPage() {
 
     if (loading || status === "loading") {
         return (
-            <div className="min-h-screen bg-zinc-50"><Navbar />
+            <div className="min-h-screen bg-zinc-50">
+                {/* <Navbar /> */}
                 <div className="max-w-lg mx-auto px-4 py-12 animate-pulse space-y-4">
                     <div className="h-5 bg-zinc-100 rounded w-1/3" />
                     <div className="h-64 bg-white border border-zinc-200 rounded-2xl" />
@@ -521,7 +522,7 @@ export default function RegisterPage() {
 
     return (
         <div className="min-h-screen bg-zinc-50">
-            <Navbar />
+            {/* <Navbar /> */}
             <main className="max-w-lg mx-auto px-4 py-8">
                 {!done && (
                     <Link href={`/events/${slug}`} className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-800 mb-6 transition-colors">
