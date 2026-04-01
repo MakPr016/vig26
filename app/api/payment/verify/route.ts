@@ -3,6 +3,7 @@ import { connectDB } from "@/lib/db";
 import { Event, Registration, Ticket, User } from "@/models";
 import { getCashfreeOrder } from "@/lib/cashfree";
 import { requireAuth, unauthorizedResponse } from "@/lib/auth-helpers";
+import { checkRateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 import {
     generateQRToken,
     generateTeamId,
@@ -16,6 +17,11 @@ import {
 import { createRegistrationSchema } from "@/lib/validations";
 
 export async function POST(req: Request) {
+    // 30 verify attempts per IP per 10 minutes
+    if (!checkRateLimit(`verify:${getClientIp(req)}`, 30, 10 * 60 * 1000)) {
+        return rateLimitResponse(60);
+    }
+
     try {
         const session = await requireAuth();
 
@@ -36,13 +42,28 @@ export async function POST(req: Request) {
         }
 
         // ── 2. Verify payment with Cashfree ────────────────────────────────────
-        const cfOrder = await getCashfreeOrder(orderId);
+        const cfOrder = await getCashfreeOrder(orderId) as any;
 
         if (cfOrder.order_status !== "PAID") {
             console.error("[payment/verify] Cashfree order not paid:", cfOrder.order_status);
             return Response.json(
                 { success: false, error: "Payment not completed. Please try again." },
                 { status: 400 }
+            );
+        }
+
+        // ── 2a. Idempotency: return early if this order was already processed ──
+        await connectDB();
+        const alreadyProcessed = await Registration.findOne({
+            paymentId: orderId,
+            paymentStatus: "completed",
+        });
+        if (alreadyProcessed) {
+            return Response.json(
+                {
+                    success: true,
+                    data: { registration: alreadyProcessed.toObject(), ticketCount: 1 },
+                },
             );
         }
 
@@ -60,8 +81,6 @@ export async function POST(req: Request) {
             );
         }
 
-        await connectDB();
-
         // ── 4. Re-validate event (capacity may have changed during checkout) ───
         const event = await Event.findById(parsed.data.eventId);
 
@@ -69,6 +88,18 @@ export async function POST(req: Request) {
             return Response.json(
                 { success: false, error: "Event not found." },
                 { status: 404 }
+            );
+        }
+
+        // ── 4a. Verify paid amount matches event price (prevent underpayment) ─
+        const paidAmount: number = cfOrder.order_amount ?? 0;
+        if (paidAmount < event.price) {
+            console.error(
+                `[payment/verify] Underpayment: paid ${paidAmount}, expected ${event.price} for order ${orderId}`
+            );
+            return Response.json(
+                { success: false, error: "Payment amount mismatch. Please contact support." },
+                { status: 400 }
             );
         }
 

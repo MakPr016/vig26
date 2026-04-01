@@ -10,19 +10,22 @@ export async function GET(req: Request) {
         const { searchParams } = new URL(req.url);
         const type = searchParams.get("type");
         const category = searchParams.get("category");
-        const search = searchParams.get("search");
-        const page = Number(searchParams.get("page") ?? 1);
-        const limit = Number(searchParams.get("limit") ?? 12);
+        const rawSearch = searchParams.get("search") ?? "";
+        const search = rawSearch.trim().slice(0, 100); // cap search at 100 chars
+        const page = Math.max(1, Math.min(Number(searchParams.get("page") ?? 1) || 1, 1000));
+        const limit = Math.max(1, Math.min(Number(searchParams.get("limit") ?? 12) || 12, 50));
 
         const { skip } = getPaginationParams(page, limit);
 
         const query: Record<string, unknown> = { status: "published", "date.start": { $gt: new Date() } };
         if (type) query.type = type;
         if (category) query.category = category;
-        if (search) {
+        if (search.length > 0) {
+            // Escape special regex characters to prevent ReDoS attacks
+            const safeSearch = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
             query.$or = [
-                { title: { $regex: search, $options: "i" } },
-                { description: { $regex: search, $options: "i" } },
+                { title: { $regex: safeSearch, $options: "i" } },
+                { description: { $regex: safeSearch, $options: "i" } },
             ];
         }
 

@@ -44,6 +44,7 @@ const RegistrationSchema = new Schema<IRegistrationDocument>(
         paymentId: {
             type: String,
             default: null,
+            index: true,
         },
         paymentStatus: {
             type: String,

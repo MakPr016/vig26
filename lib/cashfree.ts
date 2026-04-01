@@ -1,5 +1,6 @@
 // lib/cashfree.ts
 // Server-side Cashfree Payments API helper (REST, no SDK dependency)
+import crypto from "crypto";
 
 const BASE_URL =
     process.env.CASHFREE_ENV === "production"
@@ -57,6 +58,36 @@ export async function createCashfreeOrder(params: {
         throw new Error(data.message ?? "Failed to create Cashfree order");
     }
     return data;
+}
+
+/**
+ * Verify a Cashfree webhook signature.
+ * Cashfree signs: HMAC-SHA256(secretKey, timestamp + rawBody), then base64-encodes it.
+ * Headers: x-webhook-ts (unix timestamp), x-webhook-signature
+ */
+export function verifyCashfreeWebhook(
+    rawBody: string,
+    timestamp: string,
+    signature: string
+): boolean {
+    const secretKey = process.env.CASHFREE_SECRET_KEY;
+    if (!secretKey) return false;
+
+    const message = `${timestamp}${rawBody}`;
+    const expected = crypto
+        .createHmac("sha256", secretKey)
+        .update(message)
+        .digest("base64");
+
+    // Constant-time comparison to prevent timing attacks
+    try {
+        return crypto.timingSafeEqual(
+            Buffer.from(expected),
+            Buffer.from(signature)
+        );
+    } catch {
+        return false;
+    }
 }
 
 export async function getCashfreeOrder(
