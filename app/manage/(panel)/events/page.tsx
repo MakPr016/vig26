@@ -1,16 +1,23 @@
 // app/manage/(panel)/events/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { useManageEvents } from "@/hooks/use-manage-events";
 import { deleteEvent, publishEvent, cancelEvent } from "@/actions/events";
 import { toast } from "sonner";
 import {
     IconPlus, IconSearch, IconEdit, IconTrash, IconEye,
-    IconDots, IconSend, IconCalendarEvent, IconDownload, IconBan,
+    IconDots, IconSend, IconCalendarEvent, IconDownload, IconBan, IconFilter,
 } from "@tabler/icons-react";
 import type { IEvent } from "@/types";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -72,8 +79,33 @@ function exportEventsCSV(events: IEvent[]) {
 export default function ManageEventsPage() {
     const { events, loading, error, refetch } = useManageEvents();
     const [activeTab, setActiveTab] = useState<StatusTab>("all");
+    const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
+    const [deptFilter, setDeptFilter] = useState("all");
+    const [typeFilter, setTypeFilter] = useState("all");
+    const [categoryFilter, setCategoryFilter] = useState("all");
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => setSearch(searchInput), 300);
+        return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    }, [searchInput]);
+
+    const { departments, categories } = useMemo(() => {
+        const deptMap = new Map<string, string>();
+        const cats = new Set<string>();
+        for (const e of events) {
+            const dept = e.department as any;
+            if (dept?._id && dept?.name) deptMap.set(String(dept._id), dept.name);
+            if (e.category) cats.add(e.category);
+        }
+        return {
+            departments: Array.from(deptMap.entries()).map(([id, name]) => ({ id, name })),
+            categories: Array.from(cats).sort(),
+        };
+    }, [events]);
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [publishingId, setPublishingId] = useState<string | null>(null);
     const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -86,7 +118,12 @@ export default function ManageEventsPage() {
     const filtered = events.filter((e) => {
         const matchesTab = activeTab === "all" || e.status === activeTab;
         const matchesSearch = !search || e.title.toLowerCase().includes(search.toLowerCase());
-        return matchesTab && matchesSearch;
+        const dept = e.department as any;
+        const deptId = dept?._id ? String(dept._id) : String(e.department);
+        const matchesDept = deptFilter === "all" || deptId === deptFilter;
+        const matchesType = typeFilter === "all" || e.type === typeFilter;
+        const matchesCategory = categoryFilter === "all" || e.category === categoryFilter;
+        return matchesTab && matchesSearch && matchesDept && matchesType && matchesCategory;
     });
 
     const counts = {
@@ -169,17 +206,62 @@ export default function ManageEventsPage() {
 
             {/* Search + Tabs */}
             <div className="bg-white rounded-xl border border-zinc-200">
-                <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-100">
-                    <div className="relative flex-1 max-w-sm">
+                <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-zinc-100">
+                    <div className="relative flex-1 min-w-45 max-w-sm">
                         <IconSearch size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
                         <input
                             type="text"
                             placeholder="Search events…"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
+                            value={searchInput}
+                            onChange={(e) => setSearchInput(e.target.value)}
                             className="w-full pl-8 pr-3 py-2 text-sm bg-zinc-50 border border-zinc-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
                         />
                     </div>
+                    <IconFilter size={14} className="text-zinc-400 shrink-0" />
+                    {departments.length > 0 && (
+                        <Select value={deptFilter} onValueChange={setDeptFilter}>
+                            <SelectTrigger className="h-9 text-sm w-40 bg-zinc-50">
+                                <SelectValue placeholder="Department" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Departments</SelectItem>
+                                {departments.map((d) => (
+                                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
+                    <Select value={typeFilter} onValueChange={setTypeFilter}>
+                        <SelectTrigger className="h-9 text-sm w-30 bg-zinc-50">
+                            <SelectValue placeholder="Type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Types</SelectItem>
+                            <SelectItem value="inter">Inter</SelectItem>
+                            <SelectItem value="intra">Intra</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    {categories.length > 0 && (
+                        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                            <SelectTrigger className="h-9 text-sm w-35 bg-zinc-50">
+                                <SelectValue placeholder="Category" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Categories</SelectItem>
+                                {categories.map((c) => (
+                                    <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
+                    {(deptFilter !== "all" || typeFilter !== "all" || categoryFilter !== "all" || search) && (
+                        <button
+                            onClick={() => { setDeptFilter("all"); setTypeFilter("all"); setCategoryFilter("all"); setSearchInput(""); }}
+                            className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors px-2 py-1 rounded hover:bg-zinc-100"
+                        >
+                            Clear
+                        </button>
+                    )}
                 </div>
 
                 {/* Status tabs */}

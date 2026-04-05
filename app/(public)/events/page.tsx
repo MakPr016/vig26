@@ -7,7 +7,7 @@ import { useEvents } from "@/hooks/use-events";
 import { getCategories } from "@/actions/events";
 import {
     IconSearch, IconCalendarEvent, IconMapPin,
-    IconUsers, IconX, IconLoader2,
+    IconUsers, IconX,
 } from "@tabler/icons-react";
 import type { IEvent } from "@/types";
 
@@ -248,23 +248,16 @@ export default function EventsPage() {
                             {events.map((event) => (
                                 <EventCard key={event._id.toString()} event={event} />
                             ))}
+                            {loading && [...Array(3)].map((_, i) => <EventCardSkeleton key={`sk-${i}`} />)}
                         </div>
 
-                        {hasMore && (
+                        {hasMore && !loading && (
                             <div className="mt-10 text-center">
                                 <button
                                     onClick={nextPage}
-                                    disabled={loading}
-                                    className="inline-flex items-center gap-2 px-6 py-2.5 bg-white border border-zinc-200 rounded-xl text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors disabled:opacity-50"
+                                    className="inline-flex items-center gap-2 px-6 py-2.5 bg-white border border-zinc-200 rounded-xl text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
                                 >
-                                    {loading ? (
-                                        <>
-                                            <IconLoader2 size={15} className="animate-spin" />
-                                            Loading…
-                                        </>
-                                    ) : (
-                                        "Load more events"
-                                    )}
+                                    Load more events
                                 </button>
                             </div>
                         )}

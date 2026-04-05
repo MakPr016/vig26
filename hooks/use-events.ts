@@ -1,7 +1,7 @@
 // hooks/use-events.ts
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { IEvent, EventFilters, PaginatedResponse } from "@/types";
 
 const DEFAULT_RESPONSE: PaginatedResponse<IEvent> = {
@@ -15,10 +15,13 @@ const DEFAULT_RESPONSE: PaginatedResponse<IEvent> = {
 export function useEvents(initialFilters: EventFilters = {}) {
     const [filters, setFilters] = useState<EventFilters>(initialFilters);
     const [result, setResult] = useState<PaginatedResponse<IEvent>>(DEFAULT_RESPONSE);
+    const [allEvents, setAllEvents] = useState<IEvent[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    // true when the next fetch should append instead of replace
+    const appendRef = useRef(false);
 
-    const fetchEvents = useCallback(async (f: EventFilters) => {
+    const fetchEvents = useCallback(async (f: EventFilters, append: boolean) => {
         setLoading(true);
         setError(null);
 
@@ -35,6 +38,7 @@ export function useEvents(initialFilters: EventFilters = {}) {
 
             if (!data.success) throw new Error(data.error);
             setResult(data.data);
+            setAllEvents((prev) => append ? [...prev, ...data.data.data] : data.data.data);
         } catch (err: any) {
             setError(err.message ?? "Failed to load events.");
         } finally {
@@ -43,25 +47,32 @@ export function useEvents(initialFilters: EventFilters = {}) {
     }, []);
 
     useEffect(() => {
-        fetchEvents(filters);
+        const append = appendRef.current;
+        appendRef.current = false;
+        fetchEvents(filters, append);
     }, [filters, fetchEvents]);
 
     function updateFilters(updates: Partial<EventFilters>) {
+        appendRef.current = false;
+        setAllEvents([]);
         setFilters((prev) => ({ ...prev, ...updates, page: 1 }));
     }
 
     function resetFilters() {
+        appendRef.current = false;
+        setAllEvents([]);
         setFilters({ page: 1 });
     }
 
     function nextPage() {
         if (result.hasMore) {
+            appendRef.current = true;
             setFilters((prev) => ({ ...prev, page: (prev.page ?? 1) + 1 }));
         }
     }
 
     return {
-        events: result.data,
+        events: allEvents,
         total: result.total,
         page: result.page,
         hasMore: result.hasMore,
@@ -71,6 +82,6 @@ export function useEvents(initialFilters: EventFilters = {}) {
         updateFilters,
         resetFilters,
         nextPage,
-        refetch: () => fetchEvents(filters),
+        refetch: () => fetchEvents(filters, false),
     };
 }
