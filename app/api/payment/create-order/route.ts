@@ -2,6 +2,7 @@
 import { connectDB } from "@/lib/db";
 import { Event, Registration, User } from "@/models";
 import { createCashfreeOrder } from "@/lib/cashfree";
+import { createHdfcOrder } from "@/lib/hdfc";
 import { requireAuth, unauthorizedResponse } from "@/lib/auth-helpers";
 import { checkRateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 
@@ -15,7 +16,7 @@ export async function POST(req: Request) {
         const session = await requireAuth();
 
         const body = await req.json();
-        const { eventId } = body;
+        const { eventId, provider = "cashfree" } = body;
 
         if (!eventId || typeof eventId !== "string") {
             return Response.json(
@@ -71,13 +72,36 @@ export async function POST(req: Request) {
             );
         }
 
-        // ── Fetch user details needed by Cashfree ──────────────────────────────
+        // ── Fetch user details needed by the payment provider ─────────────────
         const user = await User.findById(session.user.id).select("name email").lean();
 
-        // ── Create Cashfree order ──────────────────────────────────────────────
         // Order ID: unique per attempt (timestamp suffix handles retries)
         const orderId = `vig_${session.user.id.toString().slice(-10)}_${Date.now().toString(36)}`;
 
+        if (provider === "hdfc") {
+            // ── Create HDFC SmartGateway order ─────────────────────────────────
+            const returnUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/payment/hdfc-return`;
+            const order = await createHdfcOrder({
+                orderId,
+                amount: event.price,
+                customerId: session.user.id,
+                customerEmail: (user as any)?.email ?? "noreply@vigyanrang.in",
+                returnUrl,
+                orderNote: event.title,
+            });
+
+            return Response.json({
+                success: true,
+                data: {
+                    provider: "hdfc",
+                    orderId: order.order_id,
+                    paymentLink: order.payment_link,
+                    amount: event.price,
+                },
+            });
+        }
+
+        // ── Create Cashfree order (default) ────────────────────────────────────
         const order = await createCashfreeOrder({
             orderId,
             amount: event.price,
@@ -90,6 +114,7 @@ export async function POST(req: Request) {
         return Response.json({
             success: true,
             data: {
+                provider: "cashfree",
                 orderId: order.order_id,
                 paymentSessionId: order.payment_session_id,
                 amount: event.price,

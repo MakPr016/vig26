@@ -205,11 +205,13 @@ function FormStep({
 function ReviewStep({
     event, leaderName, leaderEmail, members, responses,
     onBack, onSubmit, submitting, paymentError, onRetryPayment,
+    provider, setProvider,
 }: {
     event: IEvent; leaderName: string; leaderEmail: string;
     members: { name: string; email: string }[]; responses: Record<string, string>;
     onBack: () => void; onSubmit: () => void; submitting: boolean;
     paymentError: string | null; onRetryPayment: () => void;
+    provider: "cashfree" | "hdfc"; setProvider: (p: "cashfree" | "hdfc") => void;
 }) {
     const isPaid = event.price > 0;
 
@@ -272,11 +274,37 @@ function ReviewStep({
                 </div>
             )}
 
-            {/* Payment notice */}
+            {/* Provider selector + payment notice */}
             {isPaid && !paymentError && (
-                <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-700">
-                    <IconCreditCard size={16} className="shrink-0 mt-0.5 text-blue-400" />
-                    <span>You&apos;ll complete payment of <strong>₹{event.price}</strong> securely via UPI. Your ticket is confirmed only after successful payment.</span>
+                <div className="space-y-3">
+                    <div>
+                        <p className="text-sm font-medium text-zinc-700 mb-2">Pay with</p>
+                        <div className="grid grid-cols-2 gap-2">
+                            {(["cashfree", "hdfc"] as const).map((p) => (
+                                <button
+                                    key={p}
+                                    type="button"
+                                    onClick={() => setProvider(p)}
+                                    className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors ${
+                                        provider === p
+                                            ? "border-primary bg-primary/5 text-primary"
+                                            : "border-zinc-200 text-zinc-500 hover:border-zinc-300"
+                                    }`}
+                                >
+                                    <IconCreditCard size={15} />
+                                    {p === "cashfree" ? "Cashfree (UPI)" : "HDFC SmartGateway"}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-700">
+                        <IconCreditCard size={16} className="shrink-0 mt-0.5 text-blue-400" />
+                        {provider === "hdfc" ? (
+                            <span>You&apos;ll be redirected to HDFC SmartGateway to complete payment of <strong>₹{event.price}</strong>. Your ticket is confirmed only after successful payment.</span>
+                        ) : (
+                            <span>You&apos;ll complete payment of <strong>₹{event.price}</strong> securely via UPI. Your ticket is confirmed only after successful payment.</span>
+                        )}
+                    </div>
                 </div>
             )}
 
@@ -370,6 +398,7 @@ export default function RegisterPage() {
     const [ticketCount, setTicketCount] = useState(1);
     const [submitting, setSubmitting] = useState(false);
     const [paymentError, setPaymentError] = useState<string | null>(null);
+    const [provider, setProvider] = useState<"cashfree" | "hdfc">("cashfree");
 
     const [members, setMembers] = useState<{ name: string; email: string }[]>([]);
     const [responses, setResponses] = useState<Record<string, string>>({});
@@ -423,20 +452,16 @@ export default function RegisterPage() {
         setSubmitting(true);
         setPaymentError(null);
 
-        const sdkLoaded = await loadCashfreeScript();
-        if (!sdkLoaded) {
-            setSubmitting(false);
-            toast.error("Failed to load payment gateway. Please check your connection and try again.");
-            return;
-        }
+        const formResponses = buildFormResponses();
+        const teamMembersPayload = event.isTeamEvent ? members : [];
 
-        // Create order
-        let orderData: { orderId: string; paymentSessionId: string; amount: number };
+        // ── Create order (provider-aware) ──────────────────────────────────────
+        let orderData: { provider: string; orderId: string; paymentSessionId?: string; paymentLink?: string; amount: number };
         try {
             const res = await fetch("/api/payment/create-order", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ eventId: event._id.toString() }),
+                body: JSON.stringify({ eventId: event._id.toString(), provider }),
             });
             const json = await res.json();
             if (!json.success) { setSubmitting(false); toast.error(json.error ?? "Failed to initiate payment."); return; }
@@ -445,18 +470,33 @@ export default function RegisterPage() {
             setSubmitting(false); toast.error("Network error. Please try again."); return;
         }
 
+        // ── HDFC: save context to sessionStorage and redirect ──────────────────
+        if (provider === "hdfc" && orderData.paymentLink) {
+            sessionStorage.setItem("hdfc_pending", JSON.stringify({
+                eventId: event._id.toString(),
+                eventTitle: event.title,
+                teamMembers: teamMembersPayload,
+                formResponses,
+            }));
+            window.location.href = orderData.paymentLink;
+            return; // page will unload; no need to setSubmitting(false)
+        }
+
         setSubmitting(false);
 
-        const formResponses = buildFormResponses();
-        const teamMembersPayload = event.isTeamEvent ? members : [];
+        // ── Cashfree: open SDK modal ───────────────────────────────────────────
+        const sdkLoaded = await loadCashfreeScript();
+        if (!sdkLoaded) {
+            toast.error("Failed to load payment gateway. Please check your connection and try again.");
+            return;
+        }
 
-        // Open Cashfree checkout modal (UPI only)
         const cashfree = window.Cashfree({
             mode: process.env.NEXT_PUBLIC_CASHFREE_ENV === "production" ? "production" : "sandbox",
         });
 
         const result = await cashfree.checkout({
-            paymentSessionId: orderData.paymentSessionId,
+            paymentSessionId: orderData.paymentSessionId!,
             redirectTarget: "_modal",
         });
 
@@ -479,6 +519,7 @@ export default function RegisterPage() {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         orderId: orderData.orderId,
+                        provider: "cashfree",
                         eventId: event._id.toString(),
                         teamMembers: teamMembersPayload,
                         formResponses,
@@ -498,7 +539,7 @@ export default function RegisterPage() {
                 setPaymentError(`Payment received (Order: ${orderData.orderId}) but we couldn't confirm your registration. Please contact support.`);
             }
         }
-    }, [event, session, members, responses]);
+    }, [event, session, members, responses, provider]);
 
     async function handleSubmit() {
         if (!event) return;
@@ -557,6 +598,7 @@ export default function RegisterPage() {
                                         onBack={() => { setPaymentError(null); setStep(s => s - 1); }}
                                         onSubmit={handleSubmit} submitting={submitting}
                                         paymentError={paymentError} onRetryPayment={handlePaidSubmit}
+                                        provider={provider} setProvider={setProvider}
                                     />
                                 );
                             })()}

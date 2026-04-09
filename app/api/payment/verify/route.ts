@@ -2,6 +2,7 @@
 import { connectDB } from "@/lib/db";
 import { Event, Registration, Ticket, User } from "@/models";
 import { getCashfreeOrder } from "@/lib/cashfree";
+import { getHdfcOrderStatus, isHdfcPaid } from "@/lib/hdfc";
 import { requireAuth, unauthorizedResponse } from "@/lib/auth-helpers";
 import { checkRateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 import {
@@ -29,6 +30,7 @@ export async function POST(req: Request) {
         const {
             orderId,
             eventId,
+            provider = "cashfree",
             teamMembers = [],
             formResponses = [],
         } = body;
@@ -41,15 +43,29 @@ export async function POST(req: Request) {
             );
         }
 
-        // ── 2. Verify payment with Cashfree ────────────────────────────────────
-        const cfOrder = await getCashfreeOrder(orderId) as any;
+        // ── 2. Verify payment with the appropriate provider ────────────────────
+        let paidAmountFromProvider: number;
 
-        if (cfOrder.order_status !== "PAID") {
-            console.error("[payment/verify] Cashfree order not paid:", cfOrder.order_status);
-            return Response.json(
-                { success: false, error: "Payment not completed. Please try again." },
-                { status: 400 }
-            );
+        if (provider === "hdfc") {
+            const hdfcOrder = await getHdfcOrderStatus(orderId);
+            if (!isHdfcPaid(hdfcOrder.status)) {
+                console.error("[payment/verify] HDFC order not paid:", hdfcOrder.status);
+                return Response.json(
+                    { success: false, error: "Payment not completed. Please try again." },
+                    { status: 400 }
+                );
+            }
+            paidAmountFromProvider = hdfcOrder.amount;
+        } else {
+            const cfOrder = await getCashfreeOrder(orderId) as any;
+            if (cfOrder.order_status !== "PAID") {
+                console.error("[payment/verify] Cashfree order not paid:", cfOrder.order_status);
+                return Response.json(
+                    { success: false, error: "Payment not completed. Please try again." },
+                    { status: 400 }
+                );
+            }
+            paidAmountFromProvider = cfOrder.order_amount ?? 0;
         }
 
         // ── 2a. Idempotency: return early if this order was already processed ──
@@ -92,7 +108,7 @@ export async function POST(req: Request) {
         }
 
         // ── 4a. Verify paid amount matches event price (prevent underpayment) ─
-        const paidAmount: number = cfOrder.order_amount ?? 0;
+        const paidAmount: number = paidAmountFromProvider;
         if (paidAmount < event.price) {
             console.error(
                 `[payment/verify] Underpayment: paid ${paidAmount}, expected ${event.price} for order ${orderId}`
