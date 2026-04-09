@@ -11,23 +11,27 @@
 import { google } from "googleapis";
 import type { IEvent } from "@/types";
 
-function getAuth() {
+function getAuth(refreshToken?: string) {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+    const token = refreshToken ?? process.env.GOOGLE_REFRESH_TOKEN;
 
-    if (!clientId || !clientSecret || !refreshToken) {
+    if (!clientId || !clientSecret || !token) {
         throw new Error(
             "Missing Google OAuth credentials. Ensure GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REFRESH_TOKEN are set in .env.local"
         );
     }
 
     const oauth2 = new google.auth.OAuth2(clientId, clientSecret);
-    oauth2.setCredentials({ refresh_token: refreshToken });
+    oauth2.setCredentials({ refresh_token: token });
     return oauth2;
 }
 
-function buildHeaders(customForm: IEvent["customForm"]): string[] {
+function buildHeaders(customForm: IEvent["customForm"], maxMembers = 0): string[] {
+    const memberCols: string[] = [];
+    for (let i = 1; i <= maxMembers; i++) {
+        memberCols.push(`Member ${i} Name`, `Member ${i} Email`, `Member ${i} College ID`);
+    }
     return [
         "Registration ID",
         "Name",
@@ -35,18 +39,31 @@ function buildHeaders(customForm: IEvent["customForm"]): string[] {
         "College ID",
         "Type",
         "Team ID",
+        "Team Size",
         "Status",
         "Payment Status",
         "Registered At",
         ...customForm.map((f) => f.label),
+        ...memberCols,
     ];
 }
 
-function buildRow(reg: any, customForm: IEvent["customForm"]): string[] {
+function buildRow(reg: any, customForm: IEvent["customForm"], maxMembers = 0): string[] {
     const responseMap: Record<string, string> = {};
     for (const r of reg.formResponses ?? []) {
         responseMap[r.fieldId] = String(r.value ?? "");
     }
+
+    const members: any[] = reg.teamMembers ?? [];
+    const memberCells: string[] = [];
+    for (let i = 0; i < maxMembers; i++) {
+        memberCells.push(
+            members[i]?.name ?? "",
+            members[i]?.email ?? "",
+            (members[i] as any)?.userId?.collegeId ?? ""
+        );
+    }
+
     return [
         String(reg._id),
         reg.userId?.name ?? "—",
@@ -54,10 +71,12 @@ function buildRow(reg: any, customForm: IEvent["customForm"]): string[] {
         reg.userId?.collegeId ?? "—",
         reg.isTeamRegistration ? "Team" : "Individual",
         reg.teamId ?? "—",
+        reg.isTeamRegistration ? String(members.length + 1) : "1",
         reg.status,
         reg.paymentStatus,
         new Date(reg.createdAt).toLocaleString("en-IN"),
         ...customForm.map((f) => responseMap[String(f._id)] ?? ""),
+        ...memberCells,
     ];
 }
 
@@ -67,10 +86,13 @@ function buildRow(reg: any, customForm: IEvent["customForm"]): string[] {
  */
 export async function createEventSheet(
     eventTitle: string,
-    customForm: IEvent["customForm"]
+    customForm: IEvent["customForm"],
+    refreshToken?: string,
+    maxMembers = 0
 ): Promise<string> {
-    const auth = getAuth();
+    const auth = getAuth(refreshToken);
     const sheets = google.sheets({ version: "v4", auth });
+    const drive = google.drive({ version: "v3", auth });
 
     const created = await sheets.spreadsheets.create({
         requestBody: {
@@ -80,12 +102,18 @@ export async function createEventSheet(
 
     const spreadsheetId = created.data.spreadsheetId!;
 
+    // Make the sheet publicly readable (anyone with the link can view)
+    await drive.permissions.create({
+        fileId: spreadsheetId,
+        requestBody: { role: "reader", type: "anyone" },
+    });
+
     // Write header row
     await sheets.spreadsheets.values.update({
         spreadsheetId,
         range: "A1",
         valueInputOption: "USER_ENTERED",
-        requestBody: { values: [buildHeaders(customForm)] },
+        requestBody: { values: [buildHeaders(customForm, maxMembers)] },
     });
 
     return spreadsheetId;
@@ -98,10 +126,12 @@ export async function createEventSheet(
 export async function appendRegistrationRow(
     sheetId: string,
     event: IEvent,
-    reg: any
+    reg: any,
+    refreshToken?: string
 ): Promise<void> {
-    const auth = getAuth();
+    const auth = getAuth(refreshToken);
     const sheets = google.sheets({ version: "v4", auth });
+    const maxMembers = event.isTeamEvent ? (event.teamSize?.max ?? 0) : 0;
 
     const existing = await sheets.spreadsheets.values.get({
         spreadsheetId: sheetId,
@@ -110,9 +140,9 @@ export async function appendRegistrationRow(
 
     const rows: string[][] = [];
     if ((existing.data.values?.length ?? 0) === 0) {
-        rows.push(buildHeaders(event.customForm ?? []));
+        rows.push(buildHeaders(event.customForm ?? [], maxMembers));
     }
-    rows.push(buildRow(reg, event.customForm ?? []));
+    rows.push(buildRow(reg, event.customForm ?? [], maxMembers));
 
     await sheets.spreadsheets.values.append({
         spreadsheetId: sheetId,
@@ -130,14 +160,16 @@ export async function appendRegistrationRow(
 export async function syncAllRegistrationsToSheet(
     sheetId: string,
     event: IEvent,
-    registrations: any[]
+    registrations: any[],
+    refreshToken?: string
 ): Promise<void> {
-    const auth = getAuth();
+    const auth = getAuth(refreshToken);
     const sheets = google.sheets({ version: "v4", auth });
+    const maxMembers = event.isTeamEvent ? (event.teamSize?.max ?? 0) : 0;
 
     const rows: string[][] = [
-        buildHeaders(event.customForm ?? []),
-        ...registrations.map((r) => buildRow(r, event.customForm ?? [])),
+        buildHeaders(event.customForm ?? [], maxMembers),
+        ...registrations.map((r) => buildRow(r, event.customForm ?? [], maxMembers)),
     ];
 
     await sheets.spreadsheets.values.clear({

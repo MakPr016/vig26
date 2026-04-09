@@ -51,6 +51,12 @@ const UserSchema = new Schema<IUserDocument>(
         ref: "Registration",
       },
     ],
+    // ── Google Sheets integration (admin only) ───────────────────────────────
+    googleSheetsRefreshToken: {
+      type: String,
+      default: null,
+      select: false, // never returned in normal queries
+    },
     // ── Password reset ────────────────────────────────────────────────────────
     passwordResetToken: {
       type: String,

@@ -24,6 +24,7 @@ export async function createRegistration(input: unknown) {
     const event = await Event.findById(eventId);
     if (!event) return { success: false, error: "Event not found." };
     if (event.status !== "published") return { success: false, error: "This event is not open for registration." };
+    if (event.registrationsClosed) return { success: false, error: "Registrations for this event are closed." };
 
     if (event.capacity > 0 && event.registrationCount >= event.capacity) {
         return { success: false, error: "This event is fully booked." };

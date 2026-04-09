@@ -227,6 +227,19 @@ export async function deleteEvent(id: string) {
     return { success: true };
 }
 
+export async function toggleRegistrations(id: string) {
+    await connectDB();
+
+    const event = await Event.findById(id);
+    if (!event) return { success: false, error: "Event not found." };
+
+    await requireDepartmentAccess(event.department.toString());
+
+    await Event.findByIdAndUpdate(id, { registrationsClosed: !event.registrationsClosed });
+
+    return { success: true, registrationsClosed: !event.registrationsClosed };
+}
+
 export async function publishEvent(id: string) {
     await connectDB();
 

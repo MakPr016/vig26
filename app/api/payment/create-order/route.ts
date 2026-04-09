@@ -44,6 +44,13 @@ export async function POST(req: Request) {
             );
         }
 
+        if (event.registrationsClosed) {
+            return Response.json(
+                { success: false, error: "Registrations for this event are closed." },
+                { status: 400 }
+            );
+        }
+
         if (event.price === 0) {
             return Response.json(
                 { success: false, error: "This event is free. No payment required." },

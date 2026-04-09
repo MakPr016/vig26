@@ -78,6 +78,7 @@ export interface IUser {
     registeredEvents: (Types.ObjectId | string)[];
     passwordResetToken?: string | null;
     passwordResetExpires?: Date | null;
+    googleSheetsRefreshToken?: string | null;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -140,6 +141,8 @@ export interface IEvent {
     status: EventStatus;
     /** Maintained by pre/post hooks */
     registrationCount: number;
+    /** When true, new registrations are blocked even if event is published */
+    registrationsClosed: boolean;
     /** Google Sheets spreadsheet ID for live registration sync */
     googleSheetId?: string;
     /** Secret token for the public CSV feed URL */

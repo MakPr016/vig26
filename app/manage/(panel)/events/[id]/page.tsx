@@ -12,6 +12,7 @@ import {
     IconEdit, IconArrowLeft, IconDownload,
     IconCalendarEvent, IconMapPin, IconUsers, IconCurrencyRupee,
     IconChevronDown, IconLoader2, IconTableExport, IconRefresh, IconCopy,
+    IconBrandGoogle, IconExternalLink, IconUnlink,
 } from "@tabler/icons-react";
 import type { IEvent, IRegistration } from "@/types";
 import "@uiw/react-markdown-preview/markdown.css";
@@ -152,18 +153,23 @@ export default function ManageEventDetailPage() {
     const [activeTab, setActiveTab] = useState<"overview" | "registrations">("overview");
     const [exportMenuOpen, setExportMenuOpen] = useState(false);
     const [generatingToken, setGeneratingToken] = useState(false);
+    const [sheetsConnected, setSheetsConnected] = useState(false);
+    const [creatingSheet, setCreatingSheet] = useState(false);
+    const [unlinkingSheet, setUnlinkingSheet] = useState(false);
 
     useEffect(() => {
         async function load() {
             setLoading(true);
             try {
-                const [eventsData, regsResult] = await Promise.all([
+                const [eventsData, regsResult, sheetsStatus] = await Promise.all([
                     getManageEvents(),
                     getEventRegistrations(id),
+                    fetch("/api/auth/google-sheets/status").then((r) => r.json()),
                 ]);
                 const found = eventsData.find((e) => e._id.toString() === id) ?? null;
                 setEvent(found);
                 if (regsResult.success) setRegistrations(regsResult.data as IRegistration[]);
+                setSheetsConnected(sheetsStatus.connected ?? false);
             } catch {
                 toast.error("Failed to load event.");
             } finally {
@@ -172,6 +178,62 @@ export default function ManageEventDetailPage() {
         }
         load();
     }, [id]);
+
+    // Show a toast if returning from Google OAuth
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("sheet_connected")) {
+            toast.success("Google account connected! You can now create a sheet.");
+            setSheetsConnected(true);
+            window.history.replaceState({}, "", window.location.pathname);
+        } else if (params.get("sheet_error")) {
+            toast.error("Failed to connect Google account. Please try again.");
+            window.history.replaceState({}, "", window.location.pathname);
+        }
+    }, []);
+
+    async function handleCreateSheet() {
+        setCreatingSheet(true);
+        try {
+            const res = await fetch(`/api/events/${id}/sheet`, { method: "POST" });
+            const json = await res.json();
+            if (json.success) {
+                setEvent((prev) => prev ? { ...prev, googleSheetId: json.sheetId } as any : prev);
+                toast.success("Sheet created! Opening now…");
+                window.open(json.sheetUrl, "_blank");
+            } else {
+                toast.error(json.error ?? "Failed to create sheet.");
+            }
+        } catch {
+            toast.error("Failed to create sheet.");
+        } finally {
+            setCreatingSheet(false);
+        }
+    }
+
+    async function handleUnlinkSheet() {
+        setUnlinkingSheet(true);
+        try {
+            const res = await fetch(`/api/events/${id}/sheet`, { method: "DELETE" });
+            const json = await res.json();
+            if (json.success) {
+                setEvent((prev) => prev ? { ...prev, googleSheetId: null } as any : prev);
+                toast.success("Sheet unlinked.");
+            } else {
+                toast.error(json.error ?? "Failed to unlink sheet.");
+            }
+        } catch {
+            toast.error("Failed to unlink sheet.");
+        } finally {
+            setUnlinkingSheet(false);
+        }
+    }
+
+    async function handleDisconnectGoogle() {
+        await fetch("/api/auth/google-sheets/status", { method: "DELETE" });
+        setSheetsConnected(false);
+        toast.success("Google account disconnected.");
+    }
 
     async function handleToggleAttendance(ticketId: string) {
         setTogglingId(ticketId);
@@ -233,71 +295,76 @@ export default function ManageEventDetailPage() {
                 </Link>
             </div>
 
-            {/* Live Google Sheets feed */}
-            {(() => {
-                const csvToken = (event as any).csvToken as string | null;
-                const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
-                const feedUrl = csvToken
-                    ? `${appUrl}/api/events/${id}/registrations/csv?token=${csvToken}`
-                    : null;
-                const formula = feedUrl ? `=IMPORTDATA("${feedUrl}")` : null;
+            {/* Google Sheets integration */}
+            <div className="bg-white rounded-xl border border-zinc-200 px-5 py-4 space-y-3">
+                <div className="flex items-start justify-between gap-4">
+                    <div>
+                        <p className="text-sm font-semibold text-zinc-900 flex items-center gap-2">
+                            <IconTableExport size={16} className="text-green-600" />
+                            Google Sheets
+                        </p>
+                        <p className="text-xs text-zinc-400 mt-0.5">
+                            {(event as any).googleSheetId
+                                ? "A sheet is linked to this event. Every new registration is appended automatically."
+                                : sheetsConnected
+                                    ? "Create a sheet in your Google Drive. It will update automatically with every new registration."
+                                    : "Connect your Google account to create a live sheet for this event."}
+                        </p>
+                    </div>
 
-                return (
-                    <div className="bg-white rounded-xl border border-zinc-200 px-5 py-4">
-                        <div className="flex items-start justify-between gap-4">
-                            <div>
-                                <p className="text-sm font-semibold text-zinc-900 flex items-center gap-2">
-                                    <IconTableExport size={16} className="text-green-600" />
-                                    Live Google Sheets Feed
-                                </p>
-                                <p className="text-xs text-zinc-400 mt-0.5">
-                                    {csvToken
-                                        ? "Paste this formula into cell A1 of any Google Sheet. It auto-refreshes every hour — no action needed when new registrations come in."
-                                        : "Generate a secure feed URL to import live registrations into Google Sheets."}
-                                </p>
-                            </div>
-                            <button
-                                onClick={async () => {
-                                    setGeneratingToken(true);
-                                    const result = await generateCsvToken(id);
-                                    setGeneratingToken(false);
-                                    if (result.success) {
-                                        setEvent((prev) => prev ? { ...prev, csvToken: (result as any).token } as any : prev);
-                                        toast.success(csvToken ? "Feed URL regenerated." : "Feed URL generated!");
-                                    } else {
-                                        toast.error(result.error ?? "Failed.");
-                                    }
-                                }}
-                                disabled={generatingToken}
-                                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-600 border border-zinc-200 rounded-lg hover:bg-zinc-50 transition-colors disabled:opacity-50"
-                            >
-                                {generatingToken
-                                    ? <IconLoader2 size={13} className="animate-spin" />
-                                    : <IconRefresh size={13} />}
-                                {csvToken ? "Revoke & Regenerate" : "Generate URL"}
-                            </button>
-                        </div>
-
-                        {formula && (
-                            <div className="mt-3 flex items-center gap-2">
-                                <code className="flex-1 text-xs bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2 text-zinc-700 truncate font-mono">
-                                    {formula}
-                                </code>
-                                <button
-                                    onClick={() => {
-                                        navigator.clipboard.writeText(formula);
-                                        toast.success("Copied to clipboard!");
-                                    }}
-                                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-600 border border-zinc-200 rounded-lg hover:bg-zinc-50 transition-colors"
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 shrink-0">
+                        {(event as any).googleSheetId ? (
+                            <>
+                                <a
+                                    href={`https://docs.google.com/spreadsheets/d/${(event as any).googleSheetId}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 border border-green-200 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
                                 >
-                                    <IconCopy size={13} />
-                                    Copy
+                                    <IconExternalLink size={13} />
+                                    Open Sheet
+                                </a>
+                                <button
+                                    onClick={handleUnlinkSheet}
+                                    disabled={unlinkingSheet}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-500 border border-zinc-200 rounded-lg hover:bg-zinc-50 transition-colors disabled:opacity-50"
+                                    title="Unlink sheet (does not delete the sheet from your Drive)"
+                                >
+                                    {unlinkingSheet ? <IconLoader2 size={13} className="animate-spin" /> : <IconUnlink size={13} />}
+                                    Unlink
                                 </button>
-                            </div>
+                            </>
+                        ) : sheetsConnected ? (
+                            <>
+                                <button
+                                    onClick={handleCreateSheet}
+                                    disabled={creatingSheet}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50"
+                                >
+                                    {creatingSheet ? <IconLoader2 size={13} className="animate-spin" /> : <IconTableExport size={13} />}
+                                    {creatingSheet ? "Creating…" : "Create Sheet"}
+                                </button>
+                                <button
+                                    onClick={handleDisconnectGoogle}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-400 border border-zinc-200 rounded-lg hover:bg-zinc-50 transition-colors"
+                                    title="Disconnect Google account"
+                                >
+                                    Disconnect
+                                </button>
+                            </>
+                        ) : (
+                            <a
+                                href={`/api/auth/google-sheets/connect?returnTo=/manage/events/${id}`}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors"
+                            >
+                                <IconBrandGoogle size={13} />
+                                Connect Google
+                            </a>
                         )}
                     </div>
-                );
-            })()}
+                </div>
+            </div>
 
             {/* Event header card */}
             <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">

@@ -1,4 +1,5 @@
 // app/api/payment/verify/route.ts
+import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { Event, Registration, Ticket, User } from "@/models";
 import { getCashfreeOrder } from "@/lib/cashfree";
@@ -126,6 +127,13 @@ export async function POST(req: Request) {
             );
         }
 
+        if (event.registrationsClosed) {
+            return Response.json(
+                { success: false, error: "Registrations for this event are closed." },
+                { status: 400 }
+            );
+        }
+
         if (event.capacity > 0 && event.registrationCount >= event.capacity) {
             return Response.json(
                 {
@@ -149,28 +157,131 @@ export async function POST(req: Request) {
             );
         }
 
-        // ── 6. Create Registration ─────────────────────────────────────────────
+        // ── 6 & 7. Create Registration, Tickets, and User updates in one transaction ─
         const isTeam =
             event.isTeamEvent && parsed.data.teamMembers.length > 0;
         const teamId = isTeam ? generateTeamId() : undefined;
+        const leaderQR = generateQRToken();
 
-        let registration;
+        let registration: any;
+        let ticketCount = 1;
+        // Collect email tasks to fire after commit — external side effects must stay outside the transaction
+        const emailTasks: Array<() => Promise<void>> = [];
+
+        const dbSession = await mongoose.startSession();
         try {
-            registration = await Registration.create({
-                eventId: parsed.data.eventId,
-                userId: session.user.id,
-                formResponses: parsed.data.formResponses,
-                isTeamRegistration: isTeam,
-                teamMembers: isTeam ? parsed.data.teamMembers : [],
-                teamId,
-                paymentId: orderId,
-                paymentStatus: "completed",
-                status: "confirmed",
+            await dbSession.withTransaction(async () => {
+                // Reset mutable state on each attempt (withTransaction may retry on transient errors)
+                emailTasks.length = 0;
+                ticketCount = 1;
+
+                const [reg] = await Registration.create(
+                    [
+                        {
+                            eventId: parsed.data.eventId,
+                            userId: session.user.id,
+                            formResponses: parsed.data.formResponses,
+                            isTeamRegistration: isTeam,
+                            teamMembers: isTeam ? parsed.data.teamMembers : [],
+                            teamId,
+                            paymentId: orderId,
+                            paymentStatus: "completed",
+                            status: "confirmed",
+                        },
+                    ],
+                    { session: dbSession }
+                );
+                registration = reg;
+
+                await Ticket.create(
+                    [
+                        {
+                            registrationId: registration._id,
+                            eventId: parsed.data.eventId,
+                            userId: session.user.id,
+                            qrCode: leaderQR,
+                            teamRole: isTeam ? "leader" : "solo",
+                            teamId,
+                            attendanceStatus: false,
+                        },
+                    ],
+                    { session: dbSession }
+                );
+
+                const leaderUser = await User.findById(session.user.id).session(dbSession);
+                if (leaderUser) {
+                    emailTasks.push(() =>
+                        sendTicketConfirmationEmail({
+                            to: leaderUser.email,
+                            name: leaderUser.name,
+                            eventTitle: event.title,
+                            eventDate: formatEventDate(event.date.start, event.date.end),
+                            venue: event.venue ?? undefined,
+                            ticketId: leaderQR,
+                        })
+                    );
+                    await User.findByIdAndUpdate(
+                        session.user.id,
+                        { $addToSet: { registeredEvents: registration._id } },
+                        { session: dbSession }
+                    );
+                }
+
+                // ── Team members ───────────────────────────────────────────────
+                if (isTeam) {
+                    for (const member of parsed.data.teamMembers) {
+                        const memberUser = await User.findOne({ email: member.email }).session(dbSession);
+                        const memberQR = generateQRToken();
+
+                        await Ticket.create(
+                            [
+                                {
+                                    registrationId: registration._id,
+                                    eventId: parsed.data.eventId,
+                                    ...(memberUser ? { userId: memberUser._id } : {}),
+                                    qrCode: memberQR,
+                                    teamRole: "member",
+                                    teamId,
+                                    attendanceStatus: false,
+                                },
+                            ],
+                            { session: dbSession }
+                        );
+
+                        ticketCount++;
+
+                        if (memberUser) {
+                            emailTasks.push(() =>
+                                sendTicketConfirmationEmail({
+                                    to: memberUser.email,
+                                    name: memberUser.name,
+                                    eventTitle: event.title,
+                                    eventDate: formatEventDate(event.date.start, event.date.end),
+                                    venue: event.venue ?? undefined,
+                                    ticketId: memberQR,
+                                })
+                            );
+                            await User.findByIdAndUpdate(
+                                memberUser._id,
+                                { $addToSet: { registeredEvents: registration._id } },
+                                { session: dbSession }
+                            );
+                        } else {
+                            emailTasks.push(() =>
+                                sendTeamMemberInviteEmail({
+                                    to: member.email,
+                                    memberName: member.name,
+                                    leaderName: session.user.name ?? "Your team leader",
+                                    eventTitle: event.title,
+                                })
+                            );
+                        }
+                    }
+                }
             });
-        } catch (createErr: any) {
-            // Duplicate key error — a concurrent request already created this registration.
-            // Return the existing one rather than failing or creating a duplicate.
-            if (createErr.code === 11000) {
+        } catch (txErr: any) {
+            // Duplicate key on paymentId — a concurrent request already committed this order.
+            if (txErr.code === 11000) {
                 const existing = await Registration.findOne({ paymentId: orderId });
                 if (existing) {
                     return Response.json({
@@ -179,83 +290,13 @@ export async function POST(req: Request) {
                     });
                 }
             }
-            throw createErr;
+            throw txErr;
+        } finally {
+            dbSession.endSession();
         }
 
-        // ── 7. Create tickets and send emails ──────────────────────────────────
-        const leaderQR = generateQRToken();
-
-        await Ticket.create({
-            registrationId: registration._id,
-            eventId: parsed.data.eventId,
-            userId: session.user.id,
-            qrCode: leaderQR,
-            teamRole: isTeam ? "leader" : "solo",
-            teamId,
-            attendanceStatus: false,
-        });
-
-        let ticketCount = 1;
-
-        const leaderUser = await User.findById(session.user.id);
-        if (leaderUser) {
-            await sendTicketConfirmationEmail({
-                to: leaderUser.email,
-                name: leaderUser.name,
-                eventTitle: event.title,
-                eventDate: formatEventDate(event.date.start, event.date.end),
-                venue: event.venue ?? undefined,
-                ticketId: leaderQR,
-            });
-
-            await User.findByIdAndUpdate(session.user.id, {
-                $addToSet: { registeredEvents: registration._id },
-            });
-        }
-
-        // ── Team members ───────────────────────────────────────────────────────
-        if (isTeam) {
-            for (const member of parsed.data.teamMembers) {
-                const memberUser = await User.findOne({ email: member.email });
-                const memberQR = generateQRToken();
-
-                await Ticket.create({
-                    registrationId: registration._id,
-                    eventId: parsed.data.eventId,
-                    ...(memberUser ? { userId: memberUser._id } : {}),
-                    qrCode: memberQR,
-                    teamRole: "member",
-                    teamId,
-                    attendanceStatus: false,
-                });
-
-                ticketCount++;
-
-                if (memberUser) {
-                    await sendTicketConfirmationEmail({
-                        to: memberUser.email,
-                        name: memberUser.name,
-                        eventTitle: event.title,
-                        eventDate: formatEventDate(
-                            event.date.start,
-                            event.date.end
-                        ),
-                        venue: event.venue ?? undefined,
-                        ticketId: memberQR,
-                    });
-                    await User.findByIdAndUpdate(memberUser._id, {
-                        $addToSet: { registeredEvents: registration._id },
-                    });
-                } else {
-                    await sendTeamMemberInviteEmail({
-                        to: member.email,
-                        memberName: member.name,
-                        leaderName: session.user.name ?? "Your team leader",
-                        eventTitle: event.title,
-                    });
-                }
-            }
-        }
+        // Send emails after successful commit — failures are non-fatal
+        await Promise.allSettled(emailTasks.map((fn) => fn()));
 
         return Response.json(
             {

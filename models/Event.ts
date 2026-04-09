@@ -110,6 +110,10 @@ const EventSchema = new Schema<IEventDocument>(
       default: 0,
       min: 0,
     },
+    registrationsClosed: {
+      type: Boolean,
+      default: false,
+    },
     googleSheetId: {
       type: String,
       default: null,

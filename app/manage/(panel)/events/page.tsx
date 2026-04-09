@@ -4,11 +4,11 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { useManageEvents } from "@/hooks/use-manage-events";
-import { deleteEvent, publishEvent, cancelEvent } from "@/actions/events";
+import { deleteEvent, publishEvent, cancelEvent, toggleRegistrations } from "@/actions/events";
 import { toast } from "sonner";
 import {
     IconPlus, IconSearch, IconEdit, IconTrash, IconEye,
-    IconDots, IconSend, IconCalendarEvent, IconDownload, IconBan, IconFilter,
+    IconDots, IconSend, IconCalendarEvent, IconDownload, IconBan, IconFilter, IconLock, IconLockOpen,
 } from "@tabler/icons-react";
 import type { IEvent } from "@/types";
 import {
@@ -109,6 +109,7 @@ export default function ManageEventsPage() {
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [publishingId, setPublishingId] = useState<string | null>(null);
     const [cancellingId, setCancellingId] = useState<string | null>(null);
+    const [togglingRegId, setTogglingRegId] = useState<string | null>(null);
     const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; eventId: string | null; title: string | null }>({
         open: false,
         eventId: null,
@@ -172,6 +173,18 @@ export default function ManageEventsPage() {
             refetch();
         } else {
             toast.error(result.error ?? "Failed to cancel event.");
+        }
+    }
+
+    async function handleToggleRegistrations(id: string) {
+        setTogglingRegId(id);
+        const result = await toggleRegistrations(id);
+        setTogglingRegId(null);
+        if (result.success) {
+            toast.success(result.registrationsClosed ? "Registrations closed." : "Registrations reopened.");
+            refetch();
+        } else {
+            toast.error((result as any).error ?? "Failed to update registrations.");
         }
     }
 
@@ -324,48 +337,61 @@ export default function ManageEventsPage() {
                                 key={event._id.toString()}
                                 className="flex items-center gap-4 px-5 py-4 hover:bg-zinc-50 transition-colors"
                             >
-                                {/* Cover */}
-                                <div className="w-10 h-10 rounded-lg bg-zinc-100 shrink-0 overflow-hidden">
-                                    {event.coverImage ? (
-                                        <img src={event.coverImage} alt="" className="w-full h-full object-cover" />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center">
-                                            <IconCalendarEvent size={18} className="text-zinc-300" />
-                                        </div>
-                                    )}
-                                </div>
+                                {/* Clickable area */}
+                                <Link
+                                    href={`/manage/events/${event._id}`}
+                                    className="flex items-center gap-4 flex-1 min-w-0"
+                                >
+                                    {/* Cover */}
+                                    <div className="w-10 h-10 rounded-lg bg-zinc-100 shrink-0 overflow-hidden">
+                                        {event.coverImage ? (
+                                            <img src={event.coverImage} alt="" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center">
+                                                <IconCalendarEvent size={18} className="text-zinc-300" />
+                                            </div>
+                                        )}
+                                    </div>
 
-                                {/* Info */}
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-zinc-900 truncate">{event.title}</p>
-                                    <p className="text-xs text-zinc-400 mt-0.5">
-                                        {new Date(event.date.start).toLocaleDateString("en-IN", {
-                                            day: "numeric", month: "short", year: "numeric",
-                                        })}
-                                        {" · "}
-                                        <span className="capitalize">{event.type}</span>
-                                        {" · "}
-                                        <span className="capitalize">{event.category}</span>
-                                        {event.price === 0 ? " · Free" : ` · ₹${event.price}`}
-                                    </p>
-                                </div>
+                                    {/* Info */}
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-zinc-900 truncate">{event.title}</p>
+                                        <p className="text-xs text-zinc-400 mt-0.5">
+                                            {new Date(event.date.start).toLocaleDateString("en-IN", {
+                                                day: "numeric", month: "short", year: "numeric",
+                                            })}
+                                            {" · "}
+                                            <span className="capitalize">{event.type}</span>
+                                            {" · "}
+                                            <span className="capitalize">{event.category}</span>
+                                            {event.price === 0 ? " · Free" : ` · ₹${event.price}`}
+                                        </p>
+                                    </div>
 
-                                {/* Registrations */}
-                                <div className="hidden sm:block text-center shrink-0">
-                                    <p className="text-sm font-semibold text-zinc-900">{event.registrationCount}</p>
-                                    <p className="text-xs text-zinc-400">registrations</p>
-                                </div>
+                                    {/* Registrations */}
+                                    <div className="hidden sm:block text-center shrink-0">
+                                        <p className="text-sm font-semibold text-zinc-900">{event.registrationCount}</p>
+                                        <p className="text-xs text-zinc-400">registrations</p>
+                                    </div>
 
-                                {/* Status badge */}
-                                <span className={`hidden sm:inline-flex text-xs font-medium px-2.5 py-1 rounded-full shrink-0 ${
-                                    event.status === "published"
-                                        ? "bg-green-50 text-green-700"
-                                        : event.status === "draft"
-                                            ? "bg-zinc-100 text-zinc-600"
-                                            : "bg-red-50 text-red-600"
-                                }`}>
-                                    {event.status}
-                                </span>
+                                    {/* Status badges */}
+                                    <div className="hidden sm:flex items-center gap-1.5 shrink-0">
+                                        <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+                                            event.status === "published"
+                                                ? "bg-green-50 text-green-700"
+                                                : event.status === "draft"
+                                                    ? "bg-zinc-100 text-zinc-600"
+                                                    : "bg-red-50 text-red-600"
+                                        }`}>
+                                            {event.status}
+                                        </span>
+                                        {event.status === "published" && (event as any).registrationsClosed && (
+                                            <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-amber-50 text-amber-700">
+                                                closed
+                                            </span>
+                                        )}
+                                    </div>
+                                </Link>
 
                                 {/* Actions menu */}
                                 <div className="relative shrink-0">
@@ -378,15 +404,7 @@ export default function ManageEventsPage() {
                                     {openMenuId === event._id.toString() && (
                                         <>
                                             <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
-                                            <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-zinc-200 rounded-xl shadow-lg z-20 py-1 overflow-hidden">
-                                                <Link
-                                                    href={`/manage/events/${event._id}`}
-                                                    onClick={() => setOpenMenuId(null)}
-                                                    className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
-                                                >
-                                                    <IconEye size={15} className="text-zinc-400" />
-                                                    View
-                                                </Link>
+                                            <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-zinc-200 rounded-xl shadow-lg z-20 py-1 overflow-hidden">
                                                 <Link
                                                     href={`/manage/events/${event._id}/edit`}
                                                     onClick={() => setOpenMenuId(null)}
@@ -403,6 +421,18 @@ export default function ManageEventsPage() {
                                                     >
                                                         <IconSend size={15} className="text-zinc-400" />
                                                         {publishingId === event._id.toString() ? "Publishing…" : "Publish"}
+                                                    </button>
+                                                )}
+                                                {event.status === "published" && (
+                                                    <button
+                                                        onClick={() => { setOpenMenuId(null); handleToggleRegistrations(event._id.toString()); }}
+                                                        disabled={togglingRegId === event._id.toString()}
+                                                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                                                    >
+                                                        {(event as any).registrationsClosed
+                                                            ? <><IconLockOpen size={15} className="text-zinc-400" />Reopen Registrations</>
+                                                            : <><IconLock size={15} className="text-zinc-400" />Close Registrations</>
+                                                        }
                                                     </button>
                                                 )}
                                                 <div className="my-1 border-t border-zinc-100" />

@@ -9,7 +9,7 @@
 //   Headers: signature  (and optionally x-jp-merchant-id)
 
 import { connectDB } from "@/lib/db";
-import { Event, Registration } from "@/models";
+import { Event, Registration, User } from "@/models";
 import { verifyCashfreeWebhook } from "@/lib/cashfree";
 import { verifyHdfcWebhook, isHdfcPaid, isHdfcFailed } from "@/lib/hdfc";
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
@@ -169,27 +169,48 @@ async function confirmPayment(orderId: string, paidAmount: number, provider: str
             console.error(
                 `[webhook/${provider}] Underpayment for order ${orderId}: paid ${paidAmount}, expected ${(event as any).price}`
             );
-            reg.paymentStatus = "failed";
-            await reg.save();
+            await Registration.findOneAndUpdate(
+                { paymentId: orderId, paymentStatus: { $ne: "completed" } },
+                { paymentStatus: "failed" }
+            );
             return Response.json({ success: true });
         }
 
-        reg.paymentStatus = "completed";
-        reg.status = "confirmed";
-        await reg.save();
+        // Atomic update — guards against concurrent webhook retries
+        const updated = await Registration.findOneAndUpdate(
+            { paymentId: orderId, paymentStatus: { $ne: "completed" } },
+            { paymentStatus: "completed", status: "confirmed" },
+            { new: true }
+        );
+        if (!updated) {
+            // Another request already set it to completed — idempotent success
+            return Response.json({ success: true, message: "Already processed" });
+        }
         console.log(`[webhook/${provider}] Payment confirmed for order:`, orderId);
 
         if ((event as any)?.googleSheetId) {
             try {
+                // Resolve the event creator's Google Sheets refresh token so we
+                // use their Drive credentials instead of the global env token.
+                let sheetsRefreshToken: string | undefined;
+                if ((event as any).createdBy) {
+                    const creator = await User.findById((event as any).createdBy)
+                        .select("+googleSheetsRefreshToken")
+                        .lean();
+                    sheetsRefreshToken = (creator as any)?.googleSheetsRefreshToken ?? undefined;
+                }
+
                 const populatedReg = await Registration.findById(reg._id)
                     .populate("userId", "name email collegeId")
+                    .populate("teamMembers.userId", "name email collegeId")
                     .lean();
                 const { appendRegistrationRow } = await import("@/lib/sheets");
                 await Promise.race([
                     appendRegistrationRow(
                         (event as any).googleSheetId,
                         event as any,
-                        populatedReg
+                        populatedReg,
+                        sheetsRefreshToken
                     ),
                     new Promise<never>((_, reject) =>
                         setTimeout(() => reject(new Error("Sheet sync timeout")), 8000)
