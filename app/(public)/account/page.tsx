@@ -32,7 +32,7 @@ function Section({ title, description, children }: {
 function FieldRow({ label, value, icon: Icon }: {
     label: string;
     value: string;
-    icon: React.ElementType;
+    icon: React.ComponentType<{ size?: number | string; className?: string }>;
 }) {
     return (
         <div className="flex items-center gap-3 py-3 border-b border-zinc-100 last:border-0">
