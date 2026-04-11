@@ -14,9 +14,9 @@ gsap.registerPlugin(useGSAP);
 
 const NAV_LINKS = [
     { path: "/",          label: "Home",       num: "01" },
-    { path: "/events",    label: "Events",     num: "02" },
-    { path: "/dashboard", label: "My Tickets", num: "03", authRequired: true },
-    { path: "/account",   label: "Account",    num: "04", authRequired: true },
+    { path: "/events",    label: "Events",     num: "03" },
+    { path: "/dashboard", label: "My Tickets", num: "04", authRequired: true },
+    { path: "/account",   label: "Account",    num: "05", authRequired: true },
 ];
 
 const SOCIAL_LINKS = [
@@ -267,10 +267,62 @@ export function PublicNavbar() {
 
                 <div className="flex-1 flex flex-col justify-between px-7 py-6 overflow-y-auto overflow-x-hidden gap-8">
                     <nav className="flex flex-col">
-                        {visibleLinks.map((link) => (
+                        {visibleLinks.slice(0, 1).map((link) => (
                             <div
                                 key={link.path}
                                 className="vr-link-clip overflow-hidden border-b border-white/5 first:border-t first:border-white/5"
+                            >
+                                <div className="vr-link-inner">
+                                    <Link
+                                        href={link.path}
+                                        onClick={closeMenu}
+                                        className="group flex items-center gap-5 w-full py-2.5 no-underline text-white/85 transition-colors duration-200"
+                                    >
+                                        <span className="text-[0.6rem] text-white/18 font-medium tracking-widest w-8 shrink-0 pt-1">
+                                            {link.num}
+                                        </span>
+                                        <span className="text-[clamp(1.9rem,4.5vw,3.4rem)] font-light tracking-[-0.03em] leading-none transition-colors duration-200 group-hover:text-orange-500">
+                                            {link.label}
+                                        </span>
+                                        <IconArrowUpRight
+                                            size={26}
+                                            strokeWidth={1.5}
+                                            className="ml-auto text-orange-500 opacity-0 shrink-0 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-1 group-hover:-translate-y-1"
+                                        />
+                                    </Link>
+                                </div>
+                            </div>
+                        ))}
+
+                        {/* Hackathon — external link */}
+                        <div className="vr-link-clip overflow-hidden border-b border-white/5">
+                            <div className="vr-link-inner">
+                                <a
+                                    href="https://cepheus-2.devfolio.co/overview"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={closeMenu}
+                                    className="group flex items-center gap-5 w-full py-2.5 no-underline text-white/85 transition-colors duration-200"
+                                >
+                                    <span className="text-[0.6rem] text-white/18 font-medium tracking-widest w-8 shrink-0 pt-1">
+                                        02
+                                    </span>
+                                    <span className="text-[clamp(1.9rem,4.5vw,3.4rem)] font-light tracking-[-0.03em] leading-none transition-colors duration-200 group-hover:text-orange-500">
+                                        Hackathon
+                                    </span>
+                                    <IconArrowUpRight
+                                        size={26}
+                                        strokeWidth={1.5}
+                                        className="ml-auto text-orange-500 opacity-0 shrink-0 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-1 group-hover:-translate-y-1"
+                                    />
+                                </a>
+                            </div>
+                        </div>
+
+                        {visibleLinks.slice(1).map((link) => (
+                            <div
+                                key={link.path}
+                                className="vr-link-clip overflow-hidden border-b border-white/5"
                             >
                                 <div className="vr-link-inner">
                                     <Link
