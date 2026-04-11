@@ -120,7 +120,7 @@ function LoginPageContent() {
 
                         <p className="text-center text-sm text-zinc-500 mt-6">
                             Don&apos;t have an account?{" "}
-                            <Link href="/auth/signup" className="text-orange-600 font-medium hover:underline">
+                            <Link href="/auth/signup" className="text-red-600 font-medium hover:underline">
                                 Sign up
                             </Link>
                         </p>

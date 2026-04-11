@@ -91,7 +91,7 @@ export function PublicNavbar() {
                         alt="Vigyanrang"
                         height={40}
                         width={200}
-                        style={{ height: "40px", width: "auto", filter: isDark ? "none" : "brightness(0)" }}
+                        style={{ height: "40px", width: "auto" }}
                     />
                 </Link>
 
@@ -136,7 +136,13 @@ export function PublicNavbar() {
                             </Link>
                             <Link
                                 href="/auth/signup"
-                                className="text-[0.8rem] font-semibold text-white no-underline px-3.5 py-1.5 rounded-full bg-orange-500 hover:bg-orange-600 transition-colors duration-200"
+                                className={[
+                                    "text-[0.8rem] font-semibold no-underline",
+                                    "px-3.5 py-1.5 rounded-full border transition-all duration-200",
+                                    isDark
+                                        ? "text-zinc-900 bg-white border-white hover:bg-orange-50 hover:border-orange-100"
+                                        : "text-white bg-orange-500 border-orange-500 hover:bg-orange-600 hover:border-orange-600",
+                                ].join(" ")}
                             >
                                 Sign Up
                             </Link>

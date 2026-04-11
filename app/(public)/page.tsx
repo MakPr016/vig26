@@ -111,7 +111,7 @@ export default function CubePage() {
           <h1
             className="mb-4 text-[clamp(2.8rem,4vw,4rem)] font-bold leading-tight text-white"
           >
-            Vigyann<span className="text-red-900">rang</span>
+            Vigyaan<span className="text-red-900">rang</span>
           </h1>
           <p className="text-base leading-relaxed text-white/75">
             The official platform for registrations, events, and everything in between.
