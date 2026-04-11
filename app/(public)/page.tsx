@@ -28,7 +28,8 @@ import Link from "next/link"
 import { useSession } from "next-auth/react"
 import { Canvas } from "@react-three/fiber"
 import { ACESFilmicToneMapping } from "three"
-import { GizmoViewcube, GizmoViewport, OrbitControls, GizmoHelper } from "@react-three/drei"
+import { OrbitControls } from "@react-three/drei"
+
 import { Cubes } from "@/components/Cubes"
 
 const TARGET_DATE = new Date("2026-04-22T00:00:00")
@@ -55,16 +56,16 @@ function useCountdown(target: Date) {
 function CountdownUnit({ value, label }: { value: number; label: string }) {
   return (
     <div className="flex flex-col items-center gap-1">
-      <span className="text-3xl font-light text-white tabular-nums sm:text-4xl md:text-zinc-900">
+      <span className="text-3xl font-light text-white tabular-nums sm:text-4xl">
         {String(value).padStart(2, "0")}
       </span>
-      <span className="text-xs tracking-widest text-white/70 uppercase md:text-zinc-500">{label}</span>
+      <span className="text-xs tracking-widest text-white/60 uppercase">{label}</span>
     </div>
   )
 }
 
 function Divider() {
-  return <div className="hidden h-10 w-px self-center bg-white/35 sm:block md:bg-zinc-300" />
+  return <div className="hidden h-10 w-px self-center bg-white/30 sm:block" />
 }
 
 export default function CubePage() {
@@ -85,11 +86,9 @@ export default function CubePage() {
         >
           <color attach="background" args={["oklch(0.78 0.12 27)"]} />
           <fog attach="fog" args={["oklch(0.78 0.12 27)", 20, 60]} />
-          <GizmoHelper>
-            <GizmoViewcube />
-            <GizmoViewport />
-          </GizmoHelper>
-          <OrbitControls makeDefault enableZoom={false} />
+
+
+          <OrbitControls makeDefault enableZoom={false} enablePan={false} enableRotate={false} />
           <Cubes />
         </Canvas>
       </div>
@@ -99,22 +98,22 @@ export default function CubePage() {
         className="pointer-events-none absolute inset-y-0 left-0 hidden w-[55%] pl-10 md:block"
         style={{
           background:
-            "linear-gradient(to right, oklch(0.97 0.003 27 / 0.88) 0%, oklch(0.97 0.003 27 / 0.70) 45%, transparent 100%)",
+            "linear-gradient(to right, oklch(0.20 0.04 27 / 0.82) 0%, oklch(0.20 0.04 27 / 0.55) 45%, transparent 100%)",
         }}
       />
 
       {/* Text panel — left side, vertically centered */}
       <div className="relative z-10 flex w-full max-w-130 flex-col justify-center gap-8 px-6 py-8 sm:px-10 md:w-130 md:shrink-0 md:px-18 md:py-10">
         <div className="text-center md:text-left">
-          <p className="mb-4 text-xs font-semibold tracking-[0.2em] text-white/80 uppercase md:text-zinc-700">
+          <p className="mb-4 text-xs font-semibold tracking-[0.2em] text-white/70 uppercase">
             Coming Soon
           </p>
           <h1
-            className="mb-4 text-[clamp(2.8rem,4vw,4rem)] font-bold leading-tight text-white md:text-zinc-900"
+            className="mb-4 text-[clamp(2.8rem,4vw,4rem)] font-bold leading-tight text-white"
           >
-            Vigyann<span className="text-orange-600">rang</span>
+            Vigyann<span className="text-red-900">rang</span>
           </h1>
-          <p className="text-base leading-relaxed text-white/80 md:text-zinc-600">
+          <p className="text-base leading-relaxed text-white/75">
             The official platform for registrations, events, and everything in between.
           </p>
         </div>
@@ -133,13 +132,13 @@ export default function CubePage() {
             href={isAuthenticated ? "/dashboard" : "/auth/login"}
             className="px-6 py-3 font-semibold rounded-xl border transition-colors"
             style={{
-              background: "oklch(1 0 0 / 0.5)",
-              color: "oklch(0.21 0.006 285.885)",
-              borderColor: "oklch(0.92 0.004 286.32)",
+              background: "oklch(1 0 0 / 0.12)",
+              color: "oklch(1 0 0)",
+              borderColor: "oklch(1 0 0 / 0.3)",
               backdropFilter: "blur(8px)",
             }}
-            onMouseEnter={e => (e.currentTarget.style.background = "oklch(1 0 0 / 0.72)")}
-            onMouseLeave={e => (e.currentTarget.style.background = "oklch(1 0 0 / 0.5)")}
+            onMouseEnter={e => (e.currentTarget.style.background = "oklch(1 0 0 / 0.22)")}
+            onMouseLeave={e => (e.currentTarget.style.background = "oklch(1 0 0 / 0.12)")}
           >
             {isAuthenticated ? "My Events" : "Sign In"}
           </Link>

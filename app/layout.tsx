@@ -5,8 +5,9 @@ import { Providers } from "./providers";
 import { Toaster } from "@/components/ui/sonner";
 import { Suspense } from "react";
 import { UnauthorizedToast } from "@/components/unauthorized-toast";
+import { cn } from "@/lib/utils";
 
-const dmSans = DM_Sans({ subsets: ['latin'], variable: '--font-sans' });
+const dmSans = DM_Sans({subsets:['latin'],variable:'--font-sans'});
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -29,7 +30,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={dmSans.variable}>
+    <html lang="en" className={cn("font-sans", dmSans.variable)}>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

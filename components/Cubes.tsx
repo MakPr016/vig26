@@ -5,10 +5,9 @@ Command: npx gltfjsx@6.5.3 public/cubes.glb -o components/Cubes.tsx --types
 
 import * as THREE from 'three'
 import React from 'react'
-import { useGraph, useThree, useFrame } from '@react-three/fiber'
+import { useGraph, useThree } from '@react-three/fiber'
 import { useGLTF, PerspectiveCamera, useAnimations } from '@react-three/drei'
 import { GLTF, SkeletonUtils } from 'three-stdlib'
-import { useControls } from 'leva'
 
 type ActionName = 'Scene'
 
@@ -49,32 +48,11 @@ export function Cubes({ play, ...props }: CubesProps) {
     const { actions } = useAnimations(animations, group)
     const { gl, controls } = useThree()
 
-    const { playing, timeScale } = useControls('Animation', {
-        playing: { value: play ?? true, label: 'Play' },
-        timeScale: { value: 0.8, min: 0.1, max: 3, step: 0.1, label: 'Speed' },
-    })
-
-    const { exposure } = useControls('Rendering', {
-        exposure: { value: 0.05, min: 0.01, max: 1, step: 0.01, label: 'Exposure' },
-    })
-
-    const { x, y, z } = useControls('Cubes Position', {
-        x: { value: -1.28, min: -10, max: 10, step: 0.01 },
-        y: { value: 0.32, min: -10, max: 10, step: 0.01 },
-        z: { value: -1.25, min: -10, max: 10, step: 0.01 },
-    })
-
-    const [, setCameraPos] = useControls('Camera Position', () => ({
-        cx: { value: 0.45, disabled: true, label: 'X' },
-        cy: { value: 2.98, disabled: true, label: 'Y' },
-        cz: { value: 7.42, disabled: true, label: 'Z' },
-    }))
-
-    const { tx, ty, tz } = useControls('Camera Target', {
-        tx: { value: -3.5, min: -10, max: 10, step: 0.01, label: 'X' },
-        ty: { value: 1.7, min: -10, max: 10, step: 0.01, label: 'Y' },
-        tz: { value: -0.5, min: -10, max: 10, step: 0.01, label: 'Z' },
-    })
+    const playing = play ?? true
+    const timeScale = 0.8
+    const exposure = 0.05
+    const x = -1.28, y = 0.32, z = -1.25
+    const tx = -3.5, ty = 1.7, tz = -0.5
 
     const [isMobile, setIsMobile] = React.useState(false)
 
@@ -106,14 +84,6 @@ export function Cubes({ play, ...props }: CubesProps) {
         orbitControls.target.set(...effectiveTarget)
         orbitControls.update()
     }, [controls, effectiveTarget])
-
-    useFrame(({ camera }) => {
-        setCameraPos({
-            cx: parseFloat(camera.position.x.toFixed(3)),
-            cy: parseFloat(camera.position.y.toFixed(3)),
-            cz: parseFloat(camera.position.z.toFixed(3)),
-        })
-    })
 
     React.useEffect(() => {
         gl.toneMappingExposure = exposure

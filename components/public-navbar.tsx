@@ -2,6 +2,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
 import { useRef, useState } from "react";
 import { usePathname } from "next/navigation";
@@ -19,9 +20,9 @@ const NAV_LINKS = [
 ];
 
 const SOCIAL_LINKS = [
-    { label: "Instagram ↗", href: "#" },
+    { label: "Instagram ↗", href: "https://www.instagram.com/atria_it" },
     // { label: "Twitter / X ↗", href: "#" },
-    { label: "LinkedIn ↗", href: "#" },
+    { label: "LinkedIn ↗", href: "https://www.linkedin.com/school/atria-institute-of-technology/" },
 ];
 
 export function PublicNavbar() {
@@ -84,14 +85,14 @@ export function PublicNavbar() {
                     : "bg-white/88 backdrop-blur-md border-b border-black/7 shadow-[0_1px_0_rgba(0,0,0,0.04)]",
             ].join(" ")}>
 
-                <Link
-                    href="/"
-                    className={[
-                        "text-[1.05rem] font-bold tracking-[-0.03em] leading-none no-underline",
-                        isDark ? "text-white" : "text-zinc-900",
-                    ].join(" ")}
-                >
-                    Vigyan<span className="text-orange-500">rang</span>
+                <Link href="/" className="leading-none no-underline">
+                    <Image
+                        src="/vigyaanrang.png"
+                        alt="Vigyanrang"
+                        height={40}
+                        width={200}
+                        style={{ height: "40px", width: "auto", filter: isDark ? "none" : "brightness(0)" }}
+                    />
                 </Link>
 
                 <div className="flex items-center gap-3.5">
@@ -106,7 +107,10 @@ export function PublicNavbar() {
                                     : "border-zinc-200 hover:border-orange-400/60 hover:bg-orange-50",
                             ].join(" ")}
                         >
-                            <span className="w-6.5 h-6.5 rounded-full bg-orange-500 text-white text-[0.68rem] font-bold flex items-center justify-center shrink-0">
+                            <span className={[
+                                "w-6.5 h-6.5 rounded-full text-[0.68rem] font-bold flex items-center justify-center shrink-0",
+                                isDark ? "bg-white text-orange-500" : "bg-orange-500 text-white",
+                            ].join(" ")}>
                                 {session.user?.name?.[0]?.toUpperCase() ?? "U"}
                             </span>
                             <span className={[
@@ -168,12 +172,14 @@ export function PublicNavbar() {
                 <div className="absolute top-0 left-0 right-0 h-0.5 bg-linear-to-r from-orange-500 via-orange-400 to-transparent z-10" />
 
                 <div className="vr-overlay-bar flex items-center justify-between px-7 py-4 border-b border-white/6 shrink-0">
-                    <Link
-                        href="/"
-                        onClick={closeMenu}
-                        className="text-[1.05rem] font-bold tracking-[-0.03em] text-white no-underline leading-none"
-                    >
-                        Vigyan<span className="text-orange-500">rang</span>
+                    <Link href="/" onClick={closeMenu} className="leading-none no-underline">
+                        <Image
+                            src="/vigyaanrang.png"
+                            alt="Vigyanrang"
+                            height={40}
+                            width={200}
+                            style={{ height: "40px", width: "auto" }}
+                        />
                     </Link>
                     <button
                         onClick={closeMenu}
@@ -286,6 +292,8 @@ export function PublicNavbar() {
                                 <a
                                     key={s.label}
                                     href={s.href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
                                     className="text-[0.78rem] text-white/50 no-underline normal-case tracking-normal font-normal leading-[1.85] hover:text-orange-500 transition-colors duration-200"
                                 >
                                     {s.label}
