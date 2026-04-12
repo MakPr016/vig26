@@ -42,7 +42,9 @@ export async function POST(req: Request) {
         }
     }
 
-    const base = process.env.NEXT_PUBLIC_APP_URL ?? "";
+    // Redirect back on the same domain this request arrived on so the user's
+    // session cookie (scoped to that domain) is still valid on /payment/return.
+    const base = url.origin || (process.env.NEXT_PUBLIC_APP_URL ?? "");
     const destination = orderId
         ? `${base}/payment/return?order_id=${encodeURIComponent(orderId)}`
         : `${base}/payment/return?error=missing_order_id`;
@@ -58,7 +60,7 @@ export async function GET(req: Request) {
         url.searchParams.get("orderId")
     );
 
-    const base = process.env.NEXT_PUBLIC_APP_URL ?? "";
+    const base = url.origin || (process.env.NEXT_PUBLIC_APP_URL ?? "");
     const destination = orderId
         ? `${base}/payment/return?order_id=${encodeURIComponent(orderId)}`
         : `${base}/payment/return?error=missing_order_id`;

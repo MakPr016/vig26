@@ -87,7 +87,16 @@ export async function POST(req: Request) {
 
         if (provider === "hdfc") {
             // ── Create HDFC SmartGateway order ─────────────────────────────────
-            const returnUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/payment/hdfc-return`;
+            // Derive origin from the request so the return URL stays on the same
+            // domain the user is on (handles vigyaanrang.atria.edu.in vs vercel.app).
+            const reqOrigin =
+                req.headers.get("origin") ??
+                (() => {
+                    const h = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "";
+                    const proto = req.headers.get("x-forwarded-proto") ?? "https";
+                    return h ? `${proto}://${h}` : (process.env.NEXT_PUBLIC_APP_URL ?? "");
+                })();
+            const returnUrl = `${reqOrigin}/api/payment/hdfc-return`;
             const order = await createHdfcOrder({
                 orderId,
                 amount: event.price,
