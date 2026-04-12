@@ -54,13 +54,22 @@ function buildRow(reg: any, customForm: IEvent["customForm"], maxMembers = 0): s
         responseMap[r.fieldId] = String(r.value ?? "");
     }
 
-    const members: any[] = reg.teamMembers ?? [];
+    const additionalMembers: any[] = reg.teamMembers ?? [];
+    // Member 1 = leader, Member 2+ = additional team members
+    const allMembers = [
+        { name: reg.userId?.name ?? "", email: reg.userId?.email ?? "", collegeId: reg.userId?.collegeId ?? "" },
+        ...additionalMembers.map((m: any) => ({
+            name: m.name ?? "",
+            email: m.email ?? "",
+            collegeId: m.userId?.collegeId ?? "",
+        })),
+    ];
     const memberCells: string[] = [];
     for (let i = 0; i < maxMembers; i++) {
         memberCells.push(
-            members[i]?.name ?? "",
-            members[i]?.email ?? "",
-            (members[i] as any)?.userId?.collegeId ?? ""
+            allMembers[i]?.name ?? "",
+            allMembers[i]?.email ?? "",
+            allMembers[i]?.collegeId ?? ""
         );
     }
 
@@ -71,7 +80,7 @@ function buildRow(reg: any, customForm: IEvent["customForm"], maxMembers = 0): s
         reg.userId?.collegeId ?? "—",
         reg.isTeamRegistration ? "Team" : "Individual",
         reg.teamId ?? "—",
-        reg.isTeamRegistration ? String(members.length + 1) : "1",
+        reg.isTeamRegistration ? String(additionalMembers.length + 1) : "1",
         reg.status,
         reg.paymentStatus,
         new Date(reg.createdAt).toLocaleString("en-IN"),

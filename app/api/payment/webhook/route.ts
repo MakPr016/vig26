@@ -188,6 +188,9 @@ async function confirmPayment(orderId: string, paidAmount: number, provider: str
         }
         console.log(`[webhook/${provider}] Payment confirmed for order:`, orderId);
 
+        // Increment registrationCount now that the registration is confirmed
+        await Event.findByIdAndUpdate(updated.eventId, { $inc: { registrationCount: 1 } });
+
         if ((event as any)?.googleSheetId) {
             try {
                 // Resolve the event creator's Google Sheets refresh token so we

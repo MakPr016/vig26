@@ -193,6 +193,13 @@ export async function POST(req: Request) {
                 );
                 registration = reg;
 
+                // Increment registrationCount inside the transaction so retries don't over-count
+                await Event.findByIdAndUpdate(
+                    parsed.data.eventId,
+                    { $inc: { registrationCount: 1 } },
+                    { session: dbSession }
+                );
+
                 await Ticket.create(
                     [
                         {

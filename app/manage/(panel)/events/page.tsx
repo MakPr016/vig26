@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { useManageEvents } from "@/hooks/use-manage-events";
-import { deleteEvent, publishEvent, cancelEvent, toggleRegistrations } from "@/actions/events";
+import { deleteEvent, publishEvent, cancelEvent, toggleRegistrations, syncAllEventRegistrationCounts } from "@/actions/events";
 import { toast } from "sonner";
 import {
     IconPlus, IconSearch, IconEdit, IconTrash, IconEye,
@@ -86,6 +86,10 @@ export default function ManageEventsPage() {
     const [categoryFilter, setCategoryFilter] = useState("all");
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        syncAllEventRegistrationCounts().then(() => refetch()).catch(() => {});
+    }, []);
 
     useEffect(() => {
         if (debounceRef.current) clearTimeout(debounceRef.current);

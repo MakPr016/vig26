@@ -61,6 +61,18 @@ export async function createRegistration(input: unknown) {
         status: event.price === 0 ? "confirmed" : "pending",
     });
 
+    // Increment registrationCount for free events (paid events increment inside the payment transaction)
+    if (event.price === 0) {
+        await Event.findByIdAndUpdate(eventId, { $inc: { registrationCount: 1 } });
+        if (slotId) {
+            await Event.findByIdAndUpdate(
+                eventId,
+                { $inc: { "slots.$[slot].registrationCount": 1 } },
+                { arrayFilters: [{ "slot._id": slotId }] }
+            );
+        }
+    }
+
     const tickets: ITicket[] = [];
 
     // ── Leader / solo ticket ──────────────────────────────────────────────────

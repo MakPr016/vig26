@@ -5,10 +5,11 @@ import { useState, useEffect } from "react";
 import {
     getDepartments,
     createDepartment,
+    updateDepartment,
     deleteDepartment,
 } from "@/actions/admin";
 import { toast } from "sonner";
-import { IconPlus, IconTrash, IconBuilding, IconUsers, IconX } from "@tabler/icons-react";
+import { IconPlus, IconTrash, IconBuilding, IconUsers, IconX, IconPencil } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,10 +18,18 @@ export default function ManageDepartmentsPage() {
     const [departments, setDepartments] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [deletingId, setDeletingId] = useState<string | null>(null);
-    const [showModal, setShowModal] = useState(false);
+
+    // Create modal
+    const [showCreateModal, setShowCreateModal] = useState(false);
     const [deptName, setDeptName] = useState("");
     const [deptDesc, setDeptDesc] = useState("");
     const [creating, setCreating] = useState(false);
+
+    // Edit modal
+    const [editTarget, setEditTarget] = useState<{ id: string; name: string; description: string } | null>(null);
+    const [editName, setEditName] = useState("");
+    const [editDesc, setEditDesc] = useState("");
+    const [saving, setSaving] = useState(false);
 
     async function load() {
         setLoading(true);
@@ -43,10 +52,34 @@ export default function ManageDepartmentsPage() {
             toast.success(`Department "${deptName.trim()}" created.`);
             setDeptName("");
             setDeptDesc("");
-            setShowModal(false);
+            setShowCreateModal(false);
             load();
         } else {
             toast.error(result.error ?? "Failed to create department.");
+        }
+    }
+
+    function openEdit(dept: any) {
+        setEditTarget({ id: dept._id, name: dept.name, description: dept.description ?? "" });
+        setEditName(dept.name);
+        setEditDesc(dept.description ?? "");
+    }
+
+    async function handleUpdate(e: React.FormEvent) {
+        e.preventDefault();
+        if (!editTarget) return;
+        setSaving(true);
+        const result = await updateDepartment(editTarget.id, {
+            name: editName.trim(),
+            description: editDesc.trim() || undefined,
+        });
+        setSaving(false);
+        if (result.success) {
+            toast.success("Department updated.");
+            setEditTarget(null);
+            load();
+        } else {
+            toast.error(result.error ?? "Failed to update department.");
         }
     }
 
@@ -71,7 +104,7 @@ export default function ManageDepartmentsPage() {
                     <p className="text-sm text-zinc-500 mt-0.5">Create and manage departments for Vigyanrang.</p>
                 </div>
                 <Button
-                    onClick={() => setShowModal(true)}
+                    onClick={() => setShowCreateModal(true)}
                     className="bg-primary hover:bg-primary/80 text-primary-foreground text-sm flex items-center gap-2"
                 >
                     <IconPlus size={16} />
@@ -97,7 +130,7 @@ export default function ManageDepartmentsPage() {
                         <IconBuilding size={40} className="mx-auto text-zinc-200 mb-3" />
                         <p className="text-sm text-zinc-400">No departments yet.</p>
                         <button
-                            onClick={() => setShowModal(true)}
+                            onClick={() => setShowCreateModal(true)}
                             className="mt-3 text-sm text-orange-600 font-medium hover:underline"
                         >
                             Create your first department →
@@ -124,32 +157,42 @@ export default function ManageDepartmentsPage() {
                                     <IconUsers size={14} />
                                     <span>{dept.members?.length ?? 0} members</span>
                                 </div>
-                                <button
-                                    onClick={() => handleDelete(dept._id, dept.name)}
-                                    disabled={deletingId === dept._id}
-                                    className="p-1.5 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                                >
-                                    <IconTrash size={15} />
-                                </button>
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        onClick={() => openEdit(dept)}
+                                        className="p-1.5 text-zinc-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                                        title="Rename department"
+                                    >
+                                        <IconPencil size={15} />
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete(dept._id, dept.name)}
+                                        disabled={deletingId === dept._id}
+                                        className="p-1.5 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                                        title="Delete department"
+                                    >
+                                        <IconTrash size={15} />
+                                    </button>
+                                </div>
                             </div>
                         ))}
                     </div>
                 )}
             </div>
 
-            {showModal && (
+            {/* Create modal */}
+            {showCreateModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
                     <div className="w-full max-w-md bg-white rounded-2xl border border-zinc-200 shadow-xl p-6">
                         <div className="flex items-center justify-between mb-5">
                             <h2 className="text-lg font-bold text-zinc-900">New Department</h2>
                             <button
-                                onClick={() => setShowModal(false)}
+                                onClick={() => setShowCreateModal(false)}
                                 className="p-1.5 text-zinc-400 hover:text-zinc-700 rounded-lg hover:bg-zinc-100 transition-colors"
                             >
                                 <IconX size={18} />
                             </button>
                         </div>
-
                         <form onSubmit={handleCreate} className="space-y-4">
                             <div>
                                 <Label htmlFor="deptName">
@@ -177,12 +220,7 @@ export default function ManageDepartmentsPage() {
                                 />
                             </div>
                             <div className="flex gap-3 pt-1">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => setShowModal(false)}
-                                    className="flex-1"
-                                >
+                                <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)} className="flex-1">
                                     Cancel
                                 </Button>
                                 <Button
@@ -191,6 +229,60 @@ export default function ManageDepartmentsPage() {
                                     className="flex-1 bg-primary hover:bg-primary/80 text-primary-foreground"
                                 >
                                     {creating ? "Creating…" : "Create Department"}
+                                </Button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit/rename modal */}
+            {editTarget && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+                    <div className="w-full max-w-md bg-white rounded-2xl border border-zinc-200 shadow-xl p-6">
+                        <div className="flex items-center justify-between mb-5">
+                            <h2 className="text-lg font-bold text-zinc-900">Rename Department</h2>
+                            <button
+                                onClick={() => setEditTarget(null)}
+                                className="p-1.5 text-zinc-400 hover:text-zinc-700 rounded-lg hover:bg-zinc-100 transition-colors"
+                            >
+                                <IconX size={18} />
+                            </button>
+                        </div>
+                        <form onSubmit={handleUpdate} className="space-y-4">
+                            <div>
+                                <Label htmlFor="editName">
+                                    Department Name <span className="text-red-500">*</span>
+                                </Label>
+                                <Input
+                                    id="editName"
+                                    value={editName}
+                                    onChange={(e) => setEditName(e.target.value)}
+                                    required
+                                    autoFocus
+                                    className="mt-1"
+                                />
+                            </div>
+                            <div>
+                                <Label htmlFor="editDesc">Description</Label>
+                                <textarea
+                                    id="editDesc"
+                                    value={editDesc}
+                                    onChange={(e) => setEditDesc(e.target.value)}
+                                    rows={3}
+                                    className="mt-1 w-full text-sm border border-zinc-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500/20 resize-none"
+                                />
+                            </div>
+                            <div className="flex gap-3 pt-1">
+                                <Button type="button" variant="outline" onClick={() => setEditTarget(null)} className="flex-1">
+                                    Cancel
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    disabled={saving || !editName.trim()}
+                                    className="flex-1 bg-primary hover:bg-primary/80 text-primary-foreground"
+                                >
+                                    {saving ? "Saving…" : "Save Changes"}
                                 </Button>
                             </div>
                         </form>

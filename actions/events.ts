@@ -4,7 +4,7 @@
 import { connectDB } from "@/lib/db";
 import { Event, Category, Registration, Ticket } from "@/models";
 import { requireManagement, requireDepartmentAccess, requireSuperAdmin } from "@/lib/auth-helpers";
-import { createEventSchema, updateEventSchema, eventSlotSchema } from "@/lib/validations";
+import { createEventSchema, updateEventSchema, eventSlotSchema, eventRoundSchema } from "@/lib/validations";
 import { serialize, getPaginationParams } from "@/lib/utils";
 import type { EventFilters, PaginatedResponse, IEvent } from "@/types";
 
@@ -60,6 +60,36 @@ export async function getEventBySlug(slug: string): Promise<IEvent | null> {
     return event ? (serialize(event) as IEvent) : null;
 }
 
+export async function syncEventRegistrationCount(eventId: string) {
+    await requireManagement();
+    await connectDB();
+    const count = await Registration.countDocuments({ eventId, status: "confirmed" });
+    await Event.findByIdAndUpdate(eventId, { registrationCount: count });
+    return { success: true, count };
+}
+
+export async function syncAllEventRegistrationCounts() {
+    await requireManagement();
+    await connectDB();
+    // Aggregate confirmed registration counts per event, then bulk-update
+    const counts = await Registration.aggregate([
+        { $match: { status: "confirmed" } },
+        { $group: { _id: "$eventId", count: { $sum: 1 } } },
+    ]);
+    await Promise.all(
+        counts.map(({ _id, count }) =>
+            Event.findByIdAndUpdate(_id, { registrationCount: count })
+        )
+    );
+    // Zero out events that have no confirmed registrations
+    const eventIdsWithRegs = counts.map((c) => c._id);
+    await Event.updateMany(
+        { _id: { $nin: eventIdsWithRegs }, registrationCount: { $gt: 0 } },
+        { registrationCount: 0 }
+    );
+    return { success: true };
+}
+
 export async function getManageEvents(
     departmentId?: string,
     status?: string
@@ -106,6 +136,17 @@ export async function createEvent(formData: FormData) {
         capacity: Number(s.capacity ?? 0),
     }));
 
+    // Parse rounds
+    const toISTiso = (v: string) =>
+        new Date(v + (v.length === 16 ? ":00+05:30" : "+05:30")).toISOString();
+    const rawRounds: { _id?: string; label: string; start: string; end: string; venue?: string; description?: string }[] =
+        raw.rounds ? JSON.parse(raw.rounds as string) : [];
+    const parsedRounds = rawRounds.map((r) => ({
+        ...r,
+        start: r.start.includes("+") || r.start.endsWith("Z") ? r.start : toISTiso(r.start),
+        end: r.end.includes("+") || r.end.endsWith("Z") ? r.end : toISTiso(r.end),
+    }));
+
     // When slots are defined, derive the event-level dates from them
     let derivedDateStart = raw.dateStart as string | undefined;
     let derivedDateEnd = raw.dateEnd as string | undefined;
@@ -136,13 +177,14 @@ export async function createEvent(formData: FormData) {
         teamSizeMax: raw.teamSizeMax ? Number(raw.teamSizeMax) : undefined,
         customForm: raw.customForm ? JSON.parse(raw.customForm as string) : [],
         slots: parsedSlots,
+        rounds: parsedRounds,
     });
 
     if (!parsed.success) {
         return { success: false, error: parsed.error.issues[0].message };
     }
 
-    const { departmentId, dateStart, dateEnd, teamSizeMin, teamSizeMax, slots, ...rest } = parsed.data;
+    const { departmentId, dateStart, dateEnd, teamSizeMin, teamSizeMax, slots, rounds, ...rest } = parsed.data;
 
     await requireDepartmentAccess(departmentId);
 
@@ -160,6 +202,13 @@ export async function createEvent(formData: FormData) {
             end: new Date(s.end),
             capacity: s.capacity,
             registrationCount: 0,
+        })),
+        rounds: rounds.map((r) => ({
+            label: r.label,
+            start: new Date(r.start),
+            end: new Date(r.end),
+            venue: r.venue || undefined,
+            description: r.description || undefined,
         })),
     });
 
@@ -217,13 +266,24 @@ export async function updateEvent(id: string, formData: FormData) {
         teamSizeMax: raw.teamSizeMax ? Number(raw.teamSizeMax) : undefined,
         customForm: raw.customForm ? JSON.parse(raw.customForm as string) : undefined,
         slots: raw.slots !== undefined ? parsedSlotsUpdate : undefined,
+        rounds: raw.rounds !== undefined ? (() => {
+            const toISTisoU = (v: string) =>
+                new Date(v + (v.length === 16 ? ":00+05:30" : "+05:30")).toISOString();
+            const rawRoundsU: { _id?: string; label: string; start: string; end: string; venue?: string; description?: string }[] =
+                JSON.parse(raw.rounds as string);
+            return rawRoundsU.map((r) => ({
+                ...r,
+                start: r.start.includes("+") || r.start.endsWith("Z") ? r.start : toISTisoU(r.start),
+                end: r.end.includes("+") || r.end.endsWith("Z") ? r.end : toISTisoU(r.end),
+            }));
+        })() : undefined,
     });
 
     if (!parsed.success) {
         return { success: false, error: parsed.error.issues[0].message };
     }
 
-    const { departmentId, dateStart, dateEnd, teamSizeMin, teamSizeMax, slots: parsedSlots2, ...rest } = parsed.data;
+    const { departmentId, dateStart, dateEnd, teamSizeMin, teamSizeMax, slots: parsedSlots2, rounds: parsedRounds2, ...rest } = parsed.data;
 
     const updates: Record<string, unknown> = { ...rest };
 
@@ -262,6 +322,19 @@ export async function updateEvent(id: string, formData: FormData) {
                 registrationCount: existing?.registrationCount ?? 0,
             };
         });
+    }
+
+    // Rounds — always replace when the key is present in the request
+    if (raw.rounds !== undefined && parsedRounds2 !== undefined) {
+        const isValidObjectId = (id: string) => /^[0-9a-f]{24}$/i.test(id);
+        updates.rounds = parsedRounds2.map((r) => ({
+            ...(r._id && isValidObjectId(r._id) ? { _id: r._id } : {}),
+            label: r.label,
+            start: new Date(r.start),
+            end: new Date(r.end),
+            venue: r.venue || undefined,
+            description: r.description || undefined,
+        }));
     }
 
     // Google Sheet ID — stored directly, not part of the zod schema
@@ -363,9 +436,25 @@ export async function deleteCategory(id: string) {
 
     const category = await Category.findById(id);
     if (!category) return { success: false, error: "Category not found." };
-    if (category.isDefault) return { success: false, error: "Default categories cannot be deleted." };
 
     await Category.findByIdAndDelete(id);
+    return { success: true };
+}
+
+export async function renameCategory(id: string, name: string) {
+    await requireSuperAdmin();
+    await connectDB();
+
+    const { slugify } = await import("@/lib/utils");
+    const slug = slugify(name);
+
+    const category = await Category.findById(id);
+    if (!category) return { success: false, error: "Category not found." };
+
+    const existing = await Category.findOne({ slug, _id: { $ne: id } });
+    if (existing) return { success: false, error: "A category with this name already exists." };
+
+    await Category.findByIdAndUpdate(id, { name, slug });
     return { success: true };
 }
 

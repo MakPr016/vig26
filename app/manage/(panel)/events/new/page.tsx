@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ImageUpload } from "@/components/manage/image-upload";
-import type { IFormField, FormFieldType, IEventSlot } from "@/types";
+import type { IFormField, FormFieldType, IEventSlot, IEventRound } from "@/types";
 import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
 
@@ -82,6 +82,79 @@ function SlotRow({
                     className="h-8 text-sm"
                 />
                 <p className="text-xs text-zinc-400 mt-1">0 = unlimited for this slot.</p>
+            </div>
+        </div>
+    );
+}
+
+// ─── Round row ────────────────────────────────────────────────────────────────
+function RoundRow({
+    round, index, onUpdate, onRemove,
+}: {
+    round: Omit<IEventRound, "_id">;
+    index: number;
+    onUpdate: (i: number, u: Partial<Omit<IEventRound, "_id">>) => void;
+    onRemove: (i: number) => void;
+}) {
+    return (
+        <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Round {index + 1}</span>
+                <button
+                    type="button"
+                    onClick={() => onRemove(index)}
+                    className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                    <IconTrash size={15} />
+                </button>
+            </div>
+            <div>
+                <Label className="text-xs mb-1">Round Name <span className="text-red-500">*</span></Label>
+                <Input
+                    value={round.label}
+                    onChange={(e) => onUpdate(index, { label: e.target.value })}
+                    placeholder={`e.g. Round ${index + 1} — Preliminary`}
+                    className="h-8 text-sm"
+                    required
+                />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+                <div>
+                    <Label className="text-xs mb-1">Start <span className="text-red-500">*</span></Label>
+                    <Input
+                        type="datetime-local"
+                        value={round.start as unknown as string}
+                        onChange={(e) => onUpdate(index, { start: e.target.value as unknown as Date })}
+                        className="h-8 text-sm"
+                    />
+                </div>
+                <div>
+                    <Label className="text-xs mb-1">End <span className="text-red-500">*</span></Label>
+                    <Input
+                        type="datetime-local"
+                        value={round.end as unknown as string}
+                        onChange={(e) => onUpdate(index, { end: e.target.value as unknown as Date })}
+                        className="h-8 text-sm"
+                    />
+                </div>
+            </div>
+            <div>
+                <Label className="text-xs mb-1">Venue <span className="text-zinc-400">(optional)</span></Label>
+                <Input
+                    value={round.venue ?? ""}
+                    onChange={(e) => onUpdate(index, { venue: e.target.value })}
+                    placeholder="e.g. Lab 3B or Online"
+                    className="h-8 text-sm"
+                />
+            </div>
+            <div>
+                <Label className="text-xs mb-1">Notes <span className="text-zinc-400">(optional)</span></Label>
+                <Input
+                    value={round.description ?? ""}
+                    onChange={(e) => onUpdate(index, { description: e.target.value })}
+                    placeholder="e.g. Top 20 teams advance"
+                    className="h-8 text-sm"
+                />
             </div>
         </div>
     );
@@ -251,11 +324,12 @@ export default function NewEventPage() {
     const [formFields, setFormFields] = useState<IFormField[]>([]);
     const [useSlots, setUseSlots] = useState(false);
     const [slots, setSlots] = useState<Omit<IEventSlot, "registrationCount">[]>([]);
+    const [rounds, setRounds] = useState<Omit<IEventRound, "_id">[]>([]);
     const [isTeamEvent, setIsTeamEvent] = useState(false);
     const [teamSizeMin, setTeamSizeMin] = useState(2);
     const [teamSizeMax, setTeamSizeMax] = useState(5);
     const [expandedSections, setExpandedSections] = useState({
-        basic: true, details: true, rules: false, team: false, form: false, slots: false,
+        basic: true, details: true, rules: false, team: false, form: false, slots: false, rounds: false,
     });
 
     useEffect(() => {
@@ -320,6 +394,21 @@ export default function NewEventPage() {
         setSlots((prev) => prev.filter((_, i) => i !== index));
     }, []);
 
+    const addRound = useCallback(() => {
+        setRounds((prev) => [
+            ...prev,
+            { label: "", start: "" as unknown as Date, end: "" as unknown as Date, venue: "", description: "" },
+        ]);
+    }, []);
+
+    const updateRound = useCallback((index: number, updates: Partial<Omit<IEventRound, "_id">>) => {
+        setRounds((prev) => prev.map((r, i) => (i === index ? { ...r, ...updates } : r)));
+    }, []);
+
+    const removeRound = useCallback((index: number) => {
+        setRounds((prev) => prev.filter((_, i) => i !== index));
+    }, []);
+
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>, status: "draft" | "published") {
         e.preventDefault();
 
@@ -367,6 +456,7 @@ export default function NewEventPage() {
         formData.set("departmentId", selectedDeptId);
         formData.set("customForm", JSON.stringify(formFields.map((f, i) => ({ ...f, order: i }))));
         formData.set("slots", useSlots ? JSON.stringify(slots) : "[]");
+        formData.set("rounds", JSON.stringify(rounds));
 
         // Pass the already-uploaded Cloudinary URL as a plain string
         if (coverImageUrl) {
@@ -664,6 +754,41 @@ export default function NewEventPage() {
                                     </button>
                                 </div>
                             )}
+                        </div>
+                    )}
+                </div>
+
+                <div className="bg-white rounded-xl border border-zinc-200 px-5">
+                    <SectionHeader
+                        title="Rounds"
+                        description="Add sequential rounds (e.g. Prelims, Semi-finals, Finals) — shown on the event page"
+                        sectionKey="rounds"
+                    />
+                    {expandedSections.rounds && (
+                        <div className="pb-5 space-y-3">
+                            {rounds.length === 0 ? (
+                                <p className="text-sm text-zinc-400 text-center py-4">
+                                    No rounds yet. Add rounds to show participants the event schedule.
+                                </p>
+                            ) : (
+                                rounds.map((round, i) => (
+                                    <RoundRow
+                                        key={i}
+                                        round={round}
+                                        index={i}
+                                        onUpdate={updateRound}
+                                        onRemove={removeRound}
+                                    />
+                                ))
+                            )}
+                            <button
+                                type="button"
+                                onClick={addRound}
+                                className="flex items-center gap-2 w-full justify-center py-2.5 border-2 border-dashed border-zinc-200 rounded-xl text-sm text-zinc-500 hover:border-orange-300 hover:text-orange-600 transition-colors"
+                            >
+                                <IconPlus size={16} />
+                                Add Round
+                            </button>
                         </div>
                     )}
                 </div>

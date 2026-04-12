@@ -10,9 +10,9 @@ import { getEventBySlug } from "@/actions/events";
 import { getUserRegistrationForEvent } from "@/actions/registrations";
 import {
     IconCalendarEvent, IconMapPin, IconUsers, IconCurrencyRupee,
-    IconArrowLeft, IconTicket, IconAlertCircle, IconClock, IconLayoutList,
+    IconArrowLeft, IconTicket, IconAlertCircle, IconClock, IconLayoutList, IconFlag,
 } from "@tabler/icons-react";
-import type { IEvent, IEventSlot } from "@/types";
+import type { IEvent, IEventSlot, IEventRound } from "@/types";
 import "@uiw/react-markdown-preview/markdown.css";
 
 const MDPreview = dynamic(() => import("@uiw/react-markdown-preview"), { ssr: false });
@@ -252,6 +252,54 @@ export default function EventDetailPage() {
                                                         </span>
                                                     ) : (
                                                         <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-green-50 text-green-600">Open</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {(event.rounds?.length ?? 0) > 0 && (
+                            <div className="bg-white rounded-2xl border border-zinc-200 p-5">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <IconFlag size={16} className="text-zinc-400" />
+                                    <h2 className="text-sm font-semibold text-zinc-900">Event Rounds</h2>
+                                    <span className="text-xs text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full ml-auto">
+                                        {event.rounds!.length} round{event.rounds!.length !== 1 ? "s" : ""}
+                                    </span>
+                                </div>
+                                <div className="space-y-3">
+                                    {event.rounds!.map((round: IEventRound, idx: number) => {
+                                        const rStart = new Date(round.start);
+                                        const rEnd = new Date(round.end);
+                                        const sameDay = rStart.toDateString() === rEnd.toDateString();
+                                        return (
+                                            <div key={round._id?.toString() ?? idx} className="flex gap-4 items-start rounded-xl border border-zinc-200 px-4 py-3">
+                                                <div className="shrink-0 w-7 h-7 rounded-full bg-orange-50 flex items-center justify-center mt-0.5">
+                                                    <span className="text-xs font-bold text-orange-500">{idx + 1}</span>
+                                                </div>
+                                                <div className="flex-1 min-w-0 space-y-0.5">
+                                                    <p className="text-sm font-semibold text-zinc-900">{round.label}</p>
+                                                    <p className="text-xs text-zinc-500">
+                                                        {rStart.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "long", timeZone: "Asia/Kolkata" })}
+                                                        {" · "}
+                                                        {rStart.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })}
+                                                        {" – "}
+                                                        {sameDay
+                                                            ? rEnd.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })
+                                                            : rEnd.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "long", timeZone: "Asia/Kolkata" }) + ", " + rEnd.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })
+                                                        }
+                                                    </p>
+                                                    {round.venue && (
+                                                        <p className="text-xs text-zinc-400 flex items-center gap-1">
+                                                            <IconMapPin size={11} />
+                                                            {round.venue}
+                                                        </p>
+                                                    )}
+                                                    {round.description && (
+                                                        <p className="text-xs text-zinc-500 italic mt-1">{round.description}</p>
                                                     )}
                                                 </div>
                                             </div>

@@ -71,23 +71,6 @@ RegistrationSchema.index({ eventId: 1, userId: 1 }, { unique: true });
 // ─── Unique index: one registration per paymentId (prevents race-condition duplicates) ──
 RegistrationSchema.index({ paymentId: 1 }, { unique: true, sparse: true });
 
-// ─── Post-save: increment event's registrationCount (and slot if applicable) ─
-RegistrationSchema.post("save", async function () {
-    if (this.status === "confirmed") {
-        const Event = mongoose.model("Event");
-        await Event.findByIdAndUpdate(this.eventId, {
-            $inc: { registrationCount: 1 },
-        });
-        if (this.slotId) {
-            await Event.findByIdAndUpdate(
-                this.eventId,
-                { $inc: { "slots.$[slot].registrationCount": 1 } },
-                { arrayFilters: [{ "slot._id": this.slotId }] }
-            );
-        }
-    }
-});
-
 // ─── Post-save: decrement on cancellation ────────────────────────────────────
 RegistrationSchema.post("findOneAndUpdate", async function (doc) {
     if (doc?.status === "cancelled") {

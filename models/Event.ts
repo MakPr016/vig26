@@ -16,6 +16,18 @@ const SlotSchema = new Schema(
   { _id: true }
 );
 
+// ─── Round Sub-schema ────────────────────────────────────────────────────────
+const RoundSchema = new Schema(
+  {
+    label: { type: String, required: true, trim: true },
+    start: { type: Date, required: true },
+    end: { type: Date, required: true },
+    venue: { type: String, default: null, trim: true },
+    description: { type: String, default: null, trim: true },
+  },
+  { _id: true }
+);
+
 // ─── FormField Sub-schema ────────────────────────────────────────────────────
 const FormFieldSchema = new Schema(
   {
@@ -136,6 +148,10 @@ const EventSchema = new Schema<IEventDocument>(
     },
     slots: {
       type: [SlotSchema],
+      default: [],
+    },
+    rounds: {
+      type: [RoundSchema],
       default: [],
     },
   },

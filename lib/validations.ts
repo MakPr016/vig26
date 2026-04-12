@@ -48,6 +48,15 @@ export const createCategorySchema = z.object({
     name: z.string().min(2, "Category name must be at least 2 characters").trim(),
 });
 
+export const eventRoundSchema = z.object({
+    _id: z.string().optional(),
+    label: z.string().min(1, "Round label is required").trim(),
+    start: z.string().datetime({ message: "Invalid round start date" }),
+    end: z.string().datetime({ message: "Invalid round end date" }),
+    venue: z.string().trim().optional(),
+    description: z.string().trim().optional(),
+});
+
 export const eventSlotSchema = z.object({
     _id: z.string().optional(),
     label: z.string().trim().optional(),
@@ -83,6 +92,7 @@ const eventBaseSchema = z.object({
     teamSizeMax: z.number().int().min(2).optional(),
     customForm: z.array(formFieldSchema).default([]),
     slots: z.array(eventSlotSchema).default([]),
+    rounds: z.array(eventRoundSchema).default([]),
     status: z.enum(["draft", "published"]).default("draft"),
 });
 
@@ -132,6 +142,7 @@ export type LoginInput = z.infer<typeof loginSchema>;
 export type AcceptInviteInput = z.infer<typeof acceptInviteSchema>;
 export type SendInviteInput = z.infer<typeof sendInviteSchema>;
 export type EventSlotInput = z.infer<typeof eventSlotSchema>;
+export type EventRoundInput = z.infer<typeof eventRoundSchema>;
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 export type CreateRegistrationInput = z.infer<typeof createRegistrationSchema>;

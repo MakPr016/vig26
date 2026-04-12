@@ -2,18 +2,25 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getCategories, createCategory, deleteCategory } from "@/actions/events";
+import { useSession } from "next-auth/react";
+import { getCategories, createCategory, deleteCategory, renameCategory } from "@/actions/events";
 import { toast } from "sonner";
-import { IconPlus, IconTrash, IconTag, IconLock } from "@tabler/icons-react";
+import { IconPlus, IconTrash, IconTag, IconLock, IconPencil, IconCheck, IconX } from "@tabler/icons-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 export default function ManageCategoriesPage() {
+    const { data: session } = useSession();
+    const isSuperAdmin = session?.user?.role === "super_admin";
+
     const [categories, setCategories] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [newName, setNewName] = useState("");
     const [creating, setCreating] = useState(false);
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editName, setEditName] = useState("");
+    const [savingId, setSavingId] = useState<string | null>(null);
 
     async function load() {
         setLoading(true);
@@ -52,14 +59,115 @@ export default function ManageCategoriesPage() {
         }
     }
 
+    function startEdit(cat: any) {
+        setEditingId(cat._id);
+        setEditName(cat.name);
+    }
+
+    function cancelEdit() {
+        setEditingId(null);
+        setEditName("");
+    }
+
+    async function handleRename(id: string) {
+        if (!editName.trim()) return;
+        setSavingId(id);
+        const result = await renameCategory(id, editName.trim());
+        setSavingId(null);
+        if (result.success) {
+            toast.success("Category renamed.");
+            setEditingId(null);
+            load();
+        } else {
+            toast.error(result.error ?? "Failed to rename category.");
+        }
+    }
+
     const defaults = categories.filter((c) => c.isDefault);
     const custom = categories.filter((c) => !c.isDefault);
+
+    function CategoryRow({ cat }: { cat: any }) {
+        const isEditing = editingId === cat._id;
+        return (
+            <div key={cat._id} className="flex items-center gap-3 px-5 py-3 hover:bg-zinc-50 transition-colors">
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${cat.isDefault ? "bg-zinc-100" : "bg-orange-50"}`}>
+                    <IconTag size={14} className={cat.isDefault ? "text-zinc-400" : "text-orange-400"} />
+                </div>
+                {isEditing ? (
+                    <div className="flex-1 flex items-center gap-2">
+                        <Input
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") handleRename(cat._id); if (e.key === "Escape") cancelEdit(); }}
+                            autoFocus
+                            className="h-8 text-sm"
+                        />
+                        <button
+                            onClick={() => handleRename(cat._id)}
+                            disabled={savingId === cat._id || !editName.trim()}
+                            className="p-1.5 text-zinc-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                            <IconCheck size={15} />
+                        </button>
+                        <button
+                            onClick={cancelEdit}
+                            className="p-1.5 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded-lg transition-colors"
+                        >
+                            <IconX size={15} />
+                        </button>
+                    </div>
+                ) : (
+                    <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-zinc-900 capitalize">{cat.name}</p>
+                        <p className="text-xs text-zinc-400 font-mono">{cat.slug}</p>
+                    </div>
+                )}
+                {!isEditing && (
+                    <div className="flex items-center gap-1">
+                        {cat.isDefault && !isSuperAdmin && (
+                            <span className="text-xs bg-zinc-100 text-zinc-400 px-2 py-0.5 rounded-full">Default</span>
+                        )}
+                        {isSuperAdmin && (
+                            <>
+                                <button
+                                    onClick={() => startEdit(cat)}
+                                    className="p-1.5 text-zinc-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                                    title="Rename"
+                                >
+                                    <IconPencil size={14} />
+                                </button>
+                                <button
+                                    onClick={() => handleDelete(cat._id, cat.name)}
+                                    disabled={deletingId === cat._id}
+                                    className="p-1.5 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                                    title="Delete"
+                                >
+                                    <IconTrash size={15} />
+                                </button>
+                            </>
+                        )}
+                        {!isSuperAdmin && !cat.isDefault && (
+                            <button
+                                onClick={() => handleDelete(cat._id, cat.name)}
+                                disabled={deletingId === cat._id}
+                                className="p-1.5 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                                <IconTrash size={15} />
+                            </button>
+                        )}
+                    </div>
+                )}
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-5 max-w-2xl mx-auto">
             <div>
                 <h1 className="text-2xl font-bold text-zinc-900">Categories</h1>
-                <p className="text-sm text-zinc-500 mt-0.5">Manage event categories. Default categories cannot be deleted.</p>
+                <p className="text-sm text-zinc-500 mt-0.5">
+                    Manage event categories.{!isSuperAdmin && " Default categories cannot be deleted."}
+                </p>
             </div>
 
             {/* Add Category */}
@@ -87,7 +195,7 @@ export default function ManageCategoriesPage() {
                 <div className="flex items-center gap-2 px-5 py-4 border-b border-zinc-100">
                     <IconLock size={15} className="text-zinc-400" />
                     <h2 className="text-sm font-semibold text-zinc-900">Default Categories</h2>
-                    <span className="text-xs text-zinc-400 ml-1">Cannot be deleted</span>
+                    {!isSuperAdmin && <span className="text-xs text-zinc-400 ml-1">Cannot be deleted</span>}
                 </div>
                 {loading ? (
                     <div className="p-5 space-y-2">
@@ -95,20 +203,7 @@ export default function ManageCategoriesPage() {
                     </div>
                 ) : (
                     <div className="divide-y divide-zinc-100">
-                        {defaults.map((cat) => (
-                            <div key={cat._id} className="flex items-center justify-between px-5 py-3">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-7 h-7 rounded-lg bg-zinc-100 flex items-center justify-center">
-                                        <IconTag size={14} className="text-zinc-400" />
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-medium text-zinc-900 capitalize">{cat.name}</p>
-                                        <p className="text-xs text-zinc-400 font-mono">{cat.slug}</p>
-                                    </div>
-                                </div>
-                                <span className="text-xs bg-zinc-100 text-zinc-400 px-2 py-0.5 rounded-full">Default</span>
-                            </div>
-                        ))}
+                        {defaults.map((cat) => <CategoryRow key={cat._id} cat={cat} />)}
                     </div>
                 )}
             </div>
@@ -127,26 +222,7 @@ export default function ManageCategoriesPage() {
                         </div>
                     ) : (
                         <div className="divide-y divide-zinc-100">
-                            {custom.map((cat) => (
-                                <div key={cat._id} className="flex items-center justify-between px-5 py-3 hover:bg-zinc-50 transition-colors">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-7 h-7 rounded-lg bg-orange-50 flex items-center justify-center">
-                                            <IconTag size={14} className="text-orange-400" />
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-medium text-zinc-900 capitalize">{cat.name}</p>
-                                            <p className="text-xs text-zinc-400 font-mono">{cat.slug}</p>
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={() => handleDelete(cat._id, cat.name)}
-                                        disabled={deletingId === cat._id}
-                                        className="p-1.5 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                                    >
-                                        <IconTrash size={15} />
-                                    </button>
-                                </div>
-                            ))}
+                            {custom.map((cat) => <CategoryRow key={cat._id} cat={cat} />)}
                         </div>
                     )}
                 </div>

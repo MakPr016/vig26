@@ -57,6 +57,18 @@ export interface IEventSlot {
     registrationCount: number;
 }
 
+export interface IEventRound {
+    _id: string;
+    /** e.g. "Round 1", "Preliminary Round", "Finals" */
+    label: string;
+    start: Date;
+    end: Date;
+    /** Optional venue specific to this round */
+    venue?: string;
+    /** Optional notes about what happens in this round */
+    description?: string;
+}
+
 export interface IDepartmentMember {
     userId: Types.ObjectId | string;
     role: "dept_admin" | "coordinator";
@@ -159,6 +171,8 @@ export interface IEvent {
     csvToken?: string;
     /** Optional time slots; when present, registrations must pick a slot */
     slots?: IEventSlot[];
+    /** Sequential rounds (e.g. prelims, semi-finals, finals) — informational only */
+    rounds?: IEventRound[];
     createdAt: Date;
     updatedAt: Date;
 }

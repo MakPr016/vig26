@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { getManageEvents, generateCsvToken } from "@/actions/events";
+import { getManageEvents, generateCsvToken, syncEventRegistrationCount } from "@/actions/events";
 import { getEventRegistrations, toggleAttendance } from "@/actions/registrations";
 import { toast } from "sonner";
 import {
@@ -165,6 +165,7 @@ export default function ManageEventDetailPage() {
                     getManageEvents(),
                     getEventRegistrations(id),
                     fetch("/api/auth/google-sheets/status").then((r) => r.json()),
+                    syncEventRegistrationCount(id),
                 ]);
                 const found = eventsData.find((e) => e._id.toString() === id) ?? null;
                 setEvent(found);
@@ -411,7 +412,7 @@ export default function ManageEventDetailPage() {
                             <div>
                                 <p className="text-xs text-zinc-400">Registrations</p>
                                 <p className="text-sm font-medium text-zinc-900">
-                                    {event.registrationCount}{event.capacity > 0 ? ` / ${event.capacity}` : ""}
+                                    {registrations.length}{event.capacity > 0 ? ` / ${event.capacity}` : ""}
                                 </p>
                             </div>
                         </div>
