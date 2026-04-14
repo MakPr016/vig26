@@ -4,7 +4,7 @@ import { generateTicketQRBuffer } from "@/lib/qrcode";
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
 
-const FROM = "Vigyanrang <vigyanrang@orbit.tripodhub.in>";
+const FROM = "Vigyaanrang <vigyanrang@orbit.tripodhub.in>";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://vigyanrang.com";
 
 export async function sendManagementInviteEmail({
@@ -27,11 +27,11 @@ export async function sendManagementInviteEmail({
   const { error } = await resend.emails.send({
     from: FROM,
     to,
-    subject: `You've been invited to join ${departmentName} on Vigyanrang`,
+    subject: `You've been invited to join ${departmentName} on Vigyaanrang`,
     html: `
       <div style="background-color: #f9fafb; padding: 40px 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
         <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 40px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-          <h2 style="color: #D97706; margin-top: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.025em;">Vigyanrang</h2>
+          <h2 style="color: #D97706; margin-top: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.025em;">Vigyaanrang</h2>
           <div style="height: 1px; background-color: #f3f4f6; margin: 24px 0;"></div>
           <p style="font-size: 16px; line-height: 24px; color: #374151; margin-bottom: 16px;">Hi ${name},</p>
           <p style="font-size: 16px; line-height: 24px; color: #374151; margin-bottom: 16px;">
@@ -52,7 +52,7 @@ export async function sendManagementInviteEmail({
           </div>
         </div>
         <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 24px;">
-          Sent by <a href="${APP_URL}" style="color: #9ca3af; text-decoration: underline;">Vigyanrang</a>
+          Sent by <a href="${APP_URL}" style="color: #9ca3af; text-decoration: underline;">Vigyaanrang</a>
         </p>
       </div>
     `,
@@ -86,7 +86,7 @@ export async function sendTicketConfirmationEmail({
   const { error: ticketError } = await resend.emails.send({
     from: FROM,
     to,
-    subject: `Your ticket for ${eventTitle} — Vigyanrang`,
+    subject: `Your ticket for ${eventTitle} — Vigyaanrang`,
     attachments: [
       {
         filename: "ticket-qr.png",
@@ -98,7 +98,7 @@ export async function sendTicketConfirmationEmail({
     html: `
       <div style="background-color: #f9fafb; padding: 40px 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
         <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 40px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-          <h2 style="color: #D97706; margin-top: 0; font-size: 24px; font-weight: 700;">Vigyanrang</h2>
+          <h2 style="color: #D97706; margin-top: 0; font-size: 24px; font-weight: 700;">Vigyaanrang</h2>
           <div style="height: 1px; background-color: #f3f4f6; margin: 24px 0;"></div>
           <p style="font-size: 16px; color: #374151;">Hi ${name}, you're registered! ✓</p>
 
@@ -142,7 +142,7 @@ export async function sendTicketConfirmationEmail({
           </div>
         </div>
         <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 24px;">
-          Sent by <a href="${APP_URL}" style="color: #9ca3af; text-decoration: underline;">Vigyanrang</a>
+          Sent by <a href="${APP_URL}" style="color: #9ca3af; text-decoration: underline;">Vigyaanrang</a>
         </p>
       </div>
     `,
@@ -170,13 +170,13 @@ export async function sendTeamMemberInviteEmail({
     html: `
       <div style="background-color: #f9fafb; padding: 40px 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
         <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 40px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-          <h2 style="color: #D97706; margin-top: 0; font-size: 24px; font-weight: 700;">Vigyanrang</h2>
+          <h2 style="color: #D97706; margin-top: 0; font-size: 24px; font-weight: 700;">Vigyaanrang</h2>
           <div style="height: 1px; background-color: #f3f4f6; margin: 24px 0;"></div>
           <p style="font-size: 16px; color: #374151;">Hi ${memberName},</p>
           <p style="font-size: 16px; line-height: 24px; color: #374151;">
             Great news! <span style="font-weight: 600; color: #111827;">${leaderName}</span> has registered you as a team member for <strong>${eventTitle}</strong>.
           </p>
-          <p style="font-size: 16px; color: #374151; margin: 24px 0;">To access your ticket and event details, please create your Vigyanrang account:</p>
+          <p style="font-size: 16px; color: #374151; margin: 24px 0;">To access your ticket and event details, please create your Vigyaanrang account:</p>
           <a href="${signupLink}" style="display: inline-block; background-color: #18181B; color: #ffffff; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 600;">
             Create My Account
           </a>
@@ -206,11 +206,11 @@ export async function sendPasswordResetEmail({
   const { error: resetError } = await resend.emails.send({
     from: FROM,
     to,
-    subject: "Reset your Vigyanrang password",
+    subject: "Reset your Vigyaanrang password",
     html: `
       <div style="background-color: #f9fafb; padding: 40px 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
         <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 40px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-          <h2 style="color: #D97706; margin-top: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.025em;">Vigyanrang</h2>
+          <h2 style="color: #D97706; margin-top: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.025em;">Vigyaanrang</h2>
           <div style="height: 1px; background-color: #f3f4f6; margin: 24px 0;"></div>
           <p style="font-size: 16px; line-height: 24px; color: #374151; margin-bottom: 16px;">Hi ${name},</p>
           <p style="font-size: 16px; line-height: 24px; color: #374151; margin-bottom: 32px;">
@@ -230,7 +230,7 @@ export async function sendPasswordResetEmail({
           </div>
         </div>
         <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 24px;">
-          Sent by <a href="${APP_URL}" style="color: #9ca3af; text-decoration: underline;">Vigyanrang</a>
+          Sent by <a href="${APP_URL}" style="color: #9ca3af; text-decoration: underline;">Vigyaanrang</a>
         </p>
       </div>
     `,

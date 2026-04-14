@@ -20,8 +20,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Vigyanrang",
-  description: "Vigyanrang 2026 : Technical and Cultural Fest - Atria",
+  title: "Vigyaanrang",
+  description: "Vigyaanrang 2026 : Technical and Cultural Fest - Atria",
 };
 
 export default function RootLayout({

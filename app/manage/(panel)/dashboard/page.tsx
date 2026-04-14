@@ -60,7 +60,7 @@ export default async function ManageDashboardPage() {
                     Welcome back, {session?.user?.name?.split(" ")[0]}
                 </h1>
                 <p className="text-sm text-zinc-500 mt-1">
-                    Here&apos;s what&apos;s happening with Vigyanrang.
+                    Here&apos;s what&apos;s happening with Vigyaanrang.
                 </p>
             </div>
 

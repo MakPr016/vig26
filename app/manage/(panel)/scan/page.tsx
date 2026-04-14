@@ -332,7 +332,7 @@ function CameraScanner({ onScan, active }: { onScan: (qr: string) => void; activ
             </div>
 
             <p className="text-center text-xs text-zinc-400 mt-2">
-                Point camera at a Vigyanrang QR ticket
+                Point camera at a Vigyaanrang QR ticket
             </p>
 
             <style>{`

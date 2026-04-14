@@ -1,36 +1,92 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Vigyaanrang 2026
+
+Event registration platform for Vigyaanrang — Atria's technical and cultural fest.
+
+Built with Next.js App Router, MongoDB, NextAuth, Cashfree/HDFC payments, Cloudinary, and Resend.
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Commands
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run dev       # Start development server
+npm run build     # Production build
+npm run start     # Start production server
+npm run lint      # Run ESLint
+```
 
-## Learn More
+## Seeding
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npx ts-node scripts/seed.ts        # Seed events, categories, departments
+npx ts-node scripts/seed-admin.ts  # Seed admin user
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Environment Variables
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Create a `.env.local` file with:
 
-## Deploy on Vercel
+```env
+MONGODB_URI=
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+NEXTAUTH_SECRET=
+NEXTAUTH_URL=
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+
+RESEND_API_KEY=
+
+NEXT_PUBLIC_APP_URL=
+
+# Cashfree
+NEXT_PUBLIC_CASHFREE_APP_ID=
+CASHFREE_SECRET_KEY=
+CASHFREE_ENV=sandbox
+NEXT_PUBLIC_CASHFREE_ENV=sandbox
+
+# HDFC SmartGateway (Juspay)
+HDFC_API_KEY=
+HDFC_PAYMENT_PAGE_CLIENT_ID=
+HDFC_ENV=sandbox
+
+# Upstash Redis (rate limiting)
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
+
+# Google Sheets sync (service account)
+GOOGLE_SERVICE_ACCOUNT_EMAIL=
+GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY=
+```
+
+## Project Structure
+
+```text
+app/(public)/       Public-facing pages (home, events, auth, dashboard)
+app/manage/         Admin panel (coordinator/dept_admin/super_admin only)
+app/api/            API route handlers (auth, events, payment, upload)
+actions/            Server actions for form submissions and mutations
+models/             Mongoose models
+lib/                Utilities (db, auth, email, payments, validations)
+components/         Shared UI components
+```
+
+## Roles
+
+| Role | Access |
+| --- | --- |
+| `student` | Register for events, view dashboard |
+| `coordinator` | Manage assigned events |
+| `dept_admin` | Manage department events and coordinators |
+| `super_admin` | Full platform access |

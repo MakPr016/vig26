@@ -157,7 +157,7 @@ export function PublicNavbar() {
                 <Link href="/" className="leading-none no-underline">
                     <Image
                         src="/vigyaanrang.png"
-                        alt="Vigyanrang"
+                        alt="Vigyaanrang"
                         height={40}
                         width={200}
                         style={{ height: "40px", width: "auto", filter: isDark ? "none" : "brightness(0)" }}
@@ -250,7 +250,7 @@ export function PublicNavbar() {
                     <Link href="/" onClick={closeMenu} className="leading-none no-underline">
                         <Image
                             src="/vigyaanrang.png"
-                            alt="Vigyanrang"
+                            alt="Vigyaanrang"
                             height={40}
                             width={200}
                             style={{ height: "40px", width: "auto" }}

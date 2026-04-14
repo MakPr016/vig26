@@ -21,7 +21,7 @@ npx ts-node scripts/seed-admin.ts  # Seed admin user
 
 ## Architecture
 
-**Vigyanrang 2026** — event registration platform for a technical/cultural festival. Built with Next.js App Router, MongoDB/Mongoose, NextAuth, Razorpay payments, Cloudinary uploads, and Resend emails.
+**Vigyaanrang 2026** — event registration platform for a technical/cultural festival. Built with Next.js App Router, MongoDB/Mongoose, NextAuth, Razorpay payments, Cloudinary uploads, and Resend emails.
 
 ### Route Structure
 

@@ -63,7 +63,7 @@ export function FooterSection() {
             ref={textRef}
             className="text-6xl lg:text-7xl font-light text-white leading-none"
           >
-            Vigyanrang
+            Vigyaanrang
           </h1>
         </div>
 

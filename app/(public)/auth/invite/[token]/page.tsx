@@ -127,7 +127,7 @@ export default function AcceptInvitePage() {
                         <IconCircleCheck className="h-12 w-12 text-green-500" />
                     </div>
                     <p className="text-xs font-semibold text-orange-600 uppercase tracking-widest mb-2">
-                        Vigyanrang
+                        Vigyaanrang
                     </p>
                     <h1 className="text-xl font-bold text-zinc-900 mb-2">
                         You&apos;ve been added{inviteInfo?.department ? ` to ${inviteInfo.department}` : ""}!
@@ -167,7 +167,7 @@ export default function AcceptInvitePage() {
             <div className="w-full max-w-md bg-white rounded-2xl border border-zinc-200 p-8 shadow-sm">
                 <div className="mb-6">
                     <p className="text-xs font-semibold text-orange-600 uppercase tracking-widest mb-2">
-                        Vigyanrang
+                        Vigyaanrang
                     </p>
                     <h1 className="text-2xl font-bold text-zinc-900">Accept Invite</h1>
                     <p className="text-sm text-zinc-500 mt-1">

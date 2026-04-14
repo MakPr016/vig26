@@ -26,6 +26,15 @@ export async function createRegistration(input: unknown) {
     if (event.status !== "published") return { success: false, error: "This event is not open for registration." };
     if (event.registrationsClosed) return { success: false, error: "Registrations for this event are closed." };
 
+    // Validate required custom form fields server-side
+    for (const field of (event.customForm ?? []) as any[]) {
+        if (!field.isRequired) continue;
+        const response = formResponses.find((r) => r.fieldId === field._id.toString());
+        const val = response?.value;
+        const empty = val === undefined || val === null || (typeof val === "string" && val.trim() === "") || (Array.isArray(val) && val.length === 0);
+        if (empty) return { success: false, error: `"${field.label}" is required.` };
+    }
+
     // ── Slot validation ───────────────────────────────────────────────────────
     const hasSlots = (event.slots as any[]).length > 0;
     let chosenSlot: any = null;

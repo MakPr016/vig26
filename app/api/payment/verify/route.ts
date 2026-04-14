@@ -124,6 +124,20 @@ export async function POST(req: Request) {
             );
         }
 
+        // Validate required custom form fields server-side
+        for (const field of (event.customForm ?? []) as any[]) {
+            if (!field.isRequired) continue;
+            const response = (parsed.data.formResponses as any[]).find((r) => r.fieldId === field._id.toString());
+            const val = response?.value;
+            const empty = val === undefined || val === null || (typeof val === "string" && val.trim() === "") || (Array.isArray(val) && val.length === 0);
+            if (empty) {
+                return Response.json(
+                    { success: false, error: `"${field.label}" is required.` },
+                    { status: 400 }
+                );
+            }
+        }
+
         if (event.status !== "published") {
             return Response.json(
                 { success: false, error: "This event is no longer accepting registrations." },

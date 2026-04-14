@@ -17,6 +17,7 @@ import {
     IconX,
     IconScan,
     IconTools,
+    IconMail,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types";
@@ -66,6 +67,12 @@ const NAV_ITEMS: NavItem[] = [
         roles: ["super_admin"],
     },
     {
+        label: "Send Email",
+        href: "/manage/email",
+        icon: <IconMail size={20} />,
+        roles: ["super_admin"],
+    },
+    {
         label: "Categories",
         href: "/manage/categories",
         icon: <IconTag size={20} />,
@@ -98,7 +105,7 @@ export function ManageSidebar({ role }: ManageSidebarProps) {
             )}>
                 {!collapsed && (
                     <span className="font-bold text-zinc-900 text-base tracking-tight">
-                        Vigyan<span className="text-orange-500">rang</span>
+                        Vigyaan<span className="text-orange-500">rang</span>
                     </span>
                 )}
                 <button

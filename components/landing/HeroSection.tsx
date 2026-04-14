@@ -120,7 +120,7 @@ export function HeroSection() {
           href="/events"
           className="text-orange-500 hover:text-orange-400 font-semibold transition-colors pointer-events-auto"
         >
-          Vigyanrang 2026 is live
+          Vigyaanrang 2026 is live
         </Link>
       )}
     </div>

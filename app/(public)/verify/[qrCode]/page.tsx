@@ -17,7 +17,7 @@ import type { Metadata } from "next";
 // ─── Metadata ─────────────────────────────────────────────────────────────────
 
 export const metadata: Metadata = {
-    title: "Verify Ticket · Vigyanrang",
+    title: "Verify Ticket · Vigyaanrang",
     robots: { index: false },
 };
 

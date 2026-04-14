@@ -101,7 +101,7 @@ export default function ManageDepartmentsPage() {
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-zinc-900">Departments</h1>
-                    <p className="text-sm text-zinc-500 mt-0.5">Create and manage departments for Vigyanrang.</p>
+                    <p className="text-sm text-zinc-500 mt-0.5">Create and manage departments for Vigyaanrang.</p>
                 </div>
                 <Button
                     onClick={() => setShowCreateModal(true)}

@@ -20,7 +20,7 @@ export function AboutSection() {
 
         <div className="space-y-4">
           <p className="reveal text-base lg:text-lg text-zinc-300 font-light leading-relaxed">
-            Vigyanrang is a celebration of innovation, creativity, and technical excellence.
+            Vigyaanrang is a celebration of innovation, creativity, and technical excellence.
             Our fest brings together the brightest minds to compete, collaborate, and showcase their talents.
           </p>
           <p className="reveal text-base lg:text-lg text-zinc-300 font-light leading-relaxed">

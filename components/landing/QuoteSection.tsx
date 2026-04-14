@@ -16,7 +16,7 @@ export function QuoteSection() {
           of human progress."
         </blockquote>
         <cite className="reveal text-sm text-zinc-400 font-light not-italic">
-          — Vigyanrang 2026
+          — Vigyaanrang 2026
         </cite>
       </div>
     </section>
