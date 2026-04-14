@@ -156,6 +156,8 @@ export interface IEvent {
     capacity: number;
     /** 0 = free */
     price: number;
+    /** When true, price is charged per team member (total = price × teamSize) */
+    pricePerPerson?: boolean;
     rules?: string;
     isTeamEvent: boolean;
     teamSize?: ITeamSize;

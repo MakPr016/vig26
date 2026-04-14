@@ -344,6 +344,8 @@ export default function EventDetailPage() {
                                 <span className="text-xl font-bold text-zinc-900">
                                     {event.price === 0 ? (
                                         <span className="text-green-600">Free</span>
+                                    ) : (event as any).pricePerPerson && event.isTeamEvent ? (
+                                        `₹${event.price}/person`
                                     ) : (
                                         `₹${event.price}`
                                     )}

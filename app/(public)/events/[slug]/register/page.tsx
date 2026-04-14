@@ -304,6 +304,10 @@ function ReviewStep({
     paymentError: string | null; onRetryPayment: () => void;
     provider: "cashfree" | "hdfc";
 }) {
+    const teamSize = event.isTeamEvent ? members.length + 1 : 1;
+    const totalPrice = (event as any).pricePerPerson && event.isTeamEvent
+        ? event.price * teamSize
+        : event.price;
     const isPaid = event.price > 0;
 
     return (
@@ -328,7 +332,13 @@ function ReviewStep({
                 <div className="flex items-center justify-between pt-2 border-t border-zinc-200">
                     <span className="text-sm text-zinc-600">Entry fee</span>
                     <span className="text-sm font-semibold">
-                        {event.price === 0 ? <span className="text-green-600">Free</span> : `₹${event.price}`}
+                        {event.price === 0 ? (
+                            <span className="text-green-600">Free</span>
+                        ) : (event as any).pricePerPerson && event.isTeamEvent ? (
+                            <span>₹{event.price}/person × {teamSize} = <strong>₹{totalPrice}</strong></span>
+                        ) : (
+                            `₹${event.price}`
+                        )}
                     </span>
                 </div>
             </div>
@@ -374,7 +384,7 @@ function ReviewStep({
             {isPaid && !paymentError && (
                 <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-700">
                     <IconCreditCard size={16} className="shrink-0 mt-0.5 text-blue-400" />
-                    <span>You&apos;ll be redirected to HDFC SmartGateway to complete payment of <strong>₹{event.price}</strong> via UPI. Your ticket is confirmed only after successful payment.</span>
+                    <span>You&apos;ll be redirected to HDFC SmartGateway to complete payment of <strong>₹{totalPrice}</strong> via UPI. Your ticket is confirmed only after successful payment.</span>
                 </div>
             )}
 
@@ -404,7 +414,7 @@ function ReviewStep({
                         {submitting ? (
                             <><IconLoader2 size={15} className="animate-spin mr-2" />{isPaid ? "Opening payment…" : "Registering…"}</>
                         ) : isPaid ? (
-                            <><IconCreditCard size={15} className="mr-2" /> Pay ₹{event.price}</>
+                            <><IconCreditCard size={15} className="mr-2" /> Pay ₹{totalPrice}</>
                         ) : (
                             <><IconTicket size={15} className="mr-2" /> Confirm Registration</>
                         )}
@@ -548,7 +558,7 @@ export default function RegisterPage() {
             const res = await fetch("/api/payment/create-order", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ eventId: event._id.toString(), provider }),
+                body: JSON.stringify({ eventId: event._id.toString(), provider, teamSize: teamMembersPayload.length + 1 }),
             });
             const json = await res.json();
             if (!json.success) { setSubmitting(false); toast.error(json.error ?? "Failed to initiate payment."); return; }

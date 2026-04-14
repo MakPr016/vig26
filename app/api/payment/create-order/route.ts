@@ -16,7 +16,7 @@ export async function POST(req: Request) {
         const session = await requireAuth();
 
         const body = await req.json();
-        const { eventId, provider = "cashfree" } = body;
+        const { eventId, provider = "cashfree", teamSize } = body;
 
         if (!eventId || typeof eventId !== "string") {
             return Response.json(
@@ -56,6 +56,13 @@ export async function POST(req: Request) {
                 { success: false, error: "This event is free. No payment required." },
                 { status: 400 }
             );
+        }
+
+        // ── Compute charge amount (per-person pricing for team events) ──────────
+        let chargeAmount = event.price;
+        if ((event as any).pricePerPerson && event.isTeamEvent && typeof teamSize === "number" && teamSize >= 1) {
+            const clampedSize = Math.min(Math.max(teamSize, event.teamSize?.min ?? 1), event.teamSize?.max ?? teamSize);
+            chargeAmount = event.price * clampedSize;
         }
 
         // ── Capacity check ─────────────────────────────────────────────────────
@@ -99,7 +106,7 @@ export async function POST(req: Request) {
             const returnUrl = `${reqOrigin}/api/payment/hdfc-return`;
             const order = await createHdfcOrder({
                 orderId,
-                amount: event.price,
+                amount: chargeAmount,
                 customerId: session.user.id,
                 customerEmail: (user as any)?.email ?? "noreply@vigyanrang.in",
                 returnUrl,
@@ -112,7 +119,7 @@ export async function POST(req: Request) {
                     provider: "hdfc",
                     orderId: order.order_id,
                     paymentLink: order.payment_link,
-                    amount: event.price,
+                    amount: chargeAmount,
                 },
             });
         }
@@ -120,7 +127,7 @@ export async function POST(req: Request) {
         // ── Create Cashfree order (default) ────────────────────────────────────
         const order = await createCashfreeOrder({
             orderId,
-            amount: event.price,
+            amount: chargeAmount,
             customerId: session.user.id,
             customerName: (user as any)?.name ?? "Customer",
             customerEmail: (user as any)?.email ?? "noreply@vigyanrang.in",
@@ -133,7 +140,7 @@ export async function POST(req: Request) {
                 provider: "cashfree",
                 orderId: order.order_id,
                 paymentSessionId: order.payment_session_id,
-                amount: event.price,
+                amount: chargeAmount,
             },
         });
     } catch (err: any) {

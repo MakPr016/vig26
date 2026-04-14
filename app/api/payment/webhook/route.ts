@@ -165,9 +165,13 @@ async function confirmPayment(orderId: string, paidAmount: number, provider: str
 
     if (reg) {
         const event = await Event.findById(reg.eventId).lean();
-        if (event && paidAmount > 0 && paidAmount < (event as any).price) {
+        const memberCount = (event as any)?.pricePerPerson && (event as any)?.isTeamEvent
+            ? (reg.teamMembers?.length ?? 0) + 1  // teamMembers = others; +1 for leader
+            : 1;
+        const expectedPrice = ((event as any)?.price ?? 0) * memberCount;
+        if (event && paidAmount > 0 && paidAmount < expectedPrice) {
             console.error(
-                `[webhook/${provider}] Underpayment for order ${orderId}: paid ${paidAmount}, expected ${(event as any).price}`
+                `[webhook/${provider}] Underpayment for order ${orderId}: paid ${paidAmount}, expected ${expectedPrice}`
             );
             await Registration.findOneAndUpdate(
                 { paymentId: orderId, paymentStatus: { $ne: "completed" } },

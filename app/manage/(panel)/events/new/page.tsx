@@ -326,6 +326,7 @@ export default function NewEventPage() {
     const [slots, setSlots] = useState<Omit<IEventSlot, "registrationCount">[]>([]);
     const [rounds, setRounds] = useState<Omit<IEventRound, "_id">[]>([]);
     const [isTeamEvent, setIsTeamEvent] = useState(false);
+    const [pricePerPerson, setPricePerPerson] = useState(false);
     const [teamSizeMin, setTeamSizeMin] = useState(2);
     const [teamSizeMax, setTeamSizeMax] = useState(5);
     const [whatsappLink, setWhatsappLink] = useState("");
@@ -450,6 +451,7 @@ export default function NewEventPage() {
         formData.set("venue", venue);
         formData.set("capacity", capacity);
         formData.set("price", price);
+        formData.set("pricePerPerson", String(isTeamEvent && Number(price) > 0 && pricePerPerson));
         formData.set("status", status);
         formData.set("isTeamEvent", String(isTeamEvent));
         formData.set("description", description);
@@ -703,8 +705,32 @@ export default function NewEventPage() {
                                 )}
                                 <div>
                                     <Label htmlFor="price">Price (₹)</Label>
-                                    <Input id="price" type="number" min="0" value={price} onChange={(e) => setPrice(e.target.value)} className="mt-1" />
+                                    <Input id="price" type="number" min="0" value={price} onChange={(e) => { setPrice(e.target.value); if (Number(e.target.value) === 0) setPricePerPerson(false); }} className="mt-1" />
                                     <p className="text-xs text-zinc-400 mt-1">0 = free event.</p>
+                                    {Number(price) > 0 && (
+                                        <div className="flex items-center gap-4 mt-2">
+                                            <label className="flex items-center gap-1.5 cursor-pointer">
+                                                <input
+                                                    type="radio"
+                                                    name="pricingMode"
+                                                    checked={!pricePerPerson}
+                                                    onChange={() => setPricePerPerson(false)}
+                                                    className="accent-orange-500"
+                                                />
+                                                <span className="text-xs text-zinc-700">Per team</span>
+                                            </label>
+                                            <label className="flex items-center gap-1.5 cursor-pointer">
+                                                <input
+                                                    type="radio"
+                                                    name="pricingMode"
+                                                    checked={pricePerPerson}
+                                                    onChange={() => setPricePerPerson(true)}
+                                                    className="accent-orange-500"
+                                                />
+                                                <span className="text-xs text-zinc-700">Per person</span>
+                                            </label>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 

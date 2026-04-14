@@ -112,6 +112,10 @@ const EventSchema = new Schema<IEventDocument>(
       type: String,
       default: null,
     },
+    pricePerPerson: {
+      type: Boolean,
+      default: false,
+    },
     isTeamEvent: {
       type: Boolean,
       default: false,

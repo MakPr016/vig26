@@ -86,6 +86,7 @@ const eventBaseSchema = z.object({
     venue: z.string().trim().optional(),
     capacity: z.number().int().min(0).default(0),
     price: z.number().min(0).default(0),
+    pricePerPerson: z.boolean().default(false),
     rules: z.string().trim().optional(),
     isTeamEvent: z.boolean().default(false),
     teamSizeMin: z.number().int().min(2).optional(),

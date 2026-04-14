@@ -110,9 +110,13 @@ export async function POST(req: Request) {
 
         // ── 4a. Verify paid amount matches event price (prevent underpayment) ─
         const paidAmount: number = paidAmountFromProvider;
-        if (paidAmount < event.price) {
+        const memberCount = (event as any).pricePerPerson && event.isTeamEvent
+            ? parsed.data.teamMembers.length + 1  // teamMembers = other members; +1 for the leader
+            : 1;
+        const expectedAmount = event.price * memberCount;
+        if (paidAmount < expectedAmount) {
             console.error(
-                `[payment/verify] Underpayment: paid ${paidAmount}, expected ${event.price} for order ${orderId}`
+                `[payment/verify] Underpayment: paid ${paidAmount}, expected ${expectedAmount} for order ${orderId}`
             );
             return Response.json(
                 { success: false, error: "Payment amount mismatch. Please contact support." },

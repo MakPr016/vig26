@@ -284,6 +284,8 @@ export default function EditEventPage() {
     const [slots, setSlots] = useState<Omit<IEventSlot, "registrationCount">[]>([]);
     const [rounds, setRounds] = useState<Omit<IEventRound, "_id">[]>([]);
     const [isTeamEvent, setIsTeamEvent] = useState(false);
+    const [pricePerPerson, setPricePerPerson] = useState(false);
+    const [priceValue, setPriceValue] = useState("0");
     const [teamSizeMin, setTeamSizeMin] = useState(2);
     const [teamSizeMax, setTeamSizeMax] = useState(5);
     const [googleSheetId, setGoogleSheetId] = useState("");
@@ -305,6 +307,8 @@ export default function EditEventPage() {
             if (found) {
                 setFormFields(found.customForm ?? []);
                 setIsTeamEvent(found.isTeamEvent);
+                setPricePerPerson((found as any).pricePerPerson ?? false);
+                setPriceValue(String(found.price ?? 0));
                 setTeamSizeMin(found.teamSize?.min ?? 2);
                 setTeamSizeMax(found.teamSize?.max ?? 5);
                 // Load existing cover image URL from DB into state
@@ -412,6 +416,8 @@ export default function EditEventPage() {
         setSaving(true);
 
         const formData = new FormData(e.currentTarget);
+        const currentPrice = Number(formData.get("price") ?? 0);
+        formData.set("pricePerPerson", String(isTeamEvent && currentPrice > 0 && pricePerPerson));
         formData.set("isTeamEvent", String(isTeamEvent));
         formData.set("description", description);
         formData.set("rules", rules);
@@ -654,10 +660,35 @@ export default function EditEventPage() {
                                         name="price"
                                         type="number"
                                         min="0"
-                                        defaultValue={event.price ?? 0}
+                                        value={priceValue}
+                                        onChange={(e) => { setPriceValue(e.target.value); if (Number(e.target.value) === 0) setPricePerPerson(false); }}
                                         className="mt-1"
                                     />
                                     <p className="text-xs text-zinc-400 mt-1">0 = free event.</p>
+                                    {Number(priceValue) > 0 && (
+                                        <div className="flex items-center gap-4 mt-2">
+                                            <label className="flex items-center gap-1.5 cursor-pointer">
+                                                <input
+                                                    type="radio"
+                                                    name="pricingMode"
+                                                    checked={!pricePerPerson}
+                                                    onChange={() => setPricePerPerson(false)}
+                                                    className="accent-orange-500"
+                                                />
+                                                <span className="text-xs text-zinc-700">Per team</span>
+                                            </label>
+                                            <label className="flex items-center gap-1.5 cursor-pointer">
+                                                <input
+                                                    type="radio"
+                                                    name="pricingMode"
+                                                    checked={pricePerPerson}
+                                                    onChange={() => setPricePerPerson(true)}
+                                                    className="accent-orange-500"
+                                                />
+                                                <span className="text-xs text-zinc-700">Per person</span>
+                                            </label>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
