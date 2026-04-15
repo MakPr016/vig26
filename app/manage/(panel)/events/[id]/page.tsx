@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import {
     IconEdit, IconArrowLeft, IconDownload,
     IconCalendarEvent, IconMapPin, IconUsers, IconCurrencyRupee,
-    IconChevronDown, IconLoader2, IconTableExport, IconRefresh, IconCopy,
+    IconLoader2, IconTableExport, IconRefresh, IconCopy,
     IconBrandGoogle, IconExternalLink, IconUnlink,
 } from "@tabler/icons-react";
 import type { IEvent, IRegistration } from "@/types";
@@ -34,22 +34,30 @@ function downloadCSV(filename: string, rows: string[][]) {
     URL.revokeObjectURL(url);
 }
 
-// ─── Export: one row per registration (leader / solo) with form responses ─────
+// ─── Export: same structure as Google Sheet sync (one row per registration) ───
 
-function exportRegistrationsCSV(event: IEvent, registrations: any[]) {
+function exportGoogleSheetStyleCSV(event: IEvent, registrations: any[]) {
     const customFields = event.customForm ?? [];
+    const maxMembers = (event as any).isTeamEvent ? ((event as any).teamSize?.max ?? 0) : 0;
+
+    const memberCols: string[] = [];
+    for (let i = 1; i <= maxMembers; i++) {
+        memberCols.push(`Member ${i} Name`, `Member ${i} Email`, `Member ${i} College ID`);
+    }
 
     const headers = [
         "Registration ID",
         "Name",
         "Email",
         "College ID",
-        "Registration Type",
+        "Type",
         "Team ID",
+        "Team Size",
         "Status",
         "Payment Status",
         "Registered At",
         ...customFields.map((f) => f.label),
+        ...memberCols,
     ];
 
     const rows: string[][] = [headers];
@@ -58,6 +66,28 @@ function exportRegistrationsCSV(event: IEvent, registrations: any[]) {
         const responseMap: Record<string, string> = {};
         for (const r of reg.formResponses ?? []) {
             responseMap[r.fieldId] = r.value ?? "";
+        }
+        const additionalMembers: any[] = reg.teamMembers ?? [];
+        const allMembers = [
+            {
+                name: reg.userId?.name ?? "",
+                email: reg.userId?.email ?? "",
+                collegeId: reg.userId?.collegeId ?? "",
+            },
+            ...additionalMembers.map((m: any) => ({
+                name: m.name ?? "",
+                email: m.email ?? "",
+                collegeId: m.userId?.collegeId ?? "",
+            })),
+        ];
+
+        const memberCells: string[] = [];
+        for (let i = 0; i < maxMembers; i++) {
+            memberCells.push(
+                allMembers[i]?.name ?? "",
+                allMembers[i]?.email ?? "",
+                allMembers[i]?.collegeId ?? ""
+            );
         }
 
         rows.push([
@@ -67,77 +97,17 @@ function exportRegistrationsCSV(event: IEvent, registrations: any[]) {
             reg.userId?.collegeId ?? "—",
             reg.isTeamRegistration ? "Team" : "Individual",
             reg.teamId ?? "—",
+            reg.isTeamRegistration ? String(additionalMembers.length + 1) : "1",
             reg.status,
             reg.paymentStatus,
             new Date(reg.createdAt).toLocaleString("en-IN"),
             ...customFields.map((f) => responseMap[f._id] ?? ""),
+            ...memberCells,
         ]);
     }
 
     const safeName = event.title.replace(/[^a-z0-9]/gi, "-").toLowerCase();
     downloadCSV(`${safeName}-registrations.csv`, rows);
-}
-
-// ─── Export: one row per participant (expands team members into individual rows) 
-
-function exportAllParticipantsCSV(event: IEvent, registrations: any[]) {
-    const customFields = event.customForm ?? [];
-
-    const headers = [
-        "Registration ID",
-        "Team ID",
-        "Role",
-        "Name",
-        "Email",
-        "College ID",
-        "Registration Status",
-        "Payment Status",
-        "Registered At",
-        ...customFields.map((f) => f.label),
-    ];
-
-    const rows: string[][] = [headers];
-
-    for (const reg of registrations) {
-        const responseMap: Record<string, string> = {};
-        for (const r of reg.formResponses ?? []) {
-            responseMap[r.fieldId] = r.value ?? "";
-        }
-        const formCells = customFields.map((f) => responseMap[f._id] ?? "");
-
-        // Leader / solo
-        rows.push([
-            reg._id,
-            reg.teamId ?? "—",
-            reg.isTeamRegistration ? "Leader" : "Solo",
-            reg.userId?.name ?? "—",
-            reg.userId?.email ?? "—",
-            reg.userId?.collegeId ?? "—",
-            reg.status,
-            reg.paymentStatus,
-            new Date(reg.createdAt).toLocaleString("en-IN"),
-            ...formCells,
-        ]);
-
-        // Team members
-        for (const member of reg.teamMembers ?? []) {
-            rows.push([
-                reg._id,
-                reg.teamId ?? "—",
-                "Member",
-                member.name ?? "—",
-                member.email ?? "—",
-                "—",            // team members may not have a college ID until they sign up
-                reg.status,
-                reg.paymentStatus,
-                new Date(reg.createdAt).toLocaleString("en-IN"),
-                ...formCells,  // form responses belong to the leader's registration
-            ]);
-        }
-    }
-
-    const safeName = event.title.replace(/[^a-z0-9]/gi, "-").toLowerCase();
-    downloadCSV(`${safeName}-all-participants.csv`, rows);
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -151,7 +121,6 @@ export default function ManageEventDetailPage() {
     const [loading, setLoading] = useState(true);
     const [togglingId, setTogglingId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<"overview" | "registrations">("overview");
-    const [exportMenuOpen, setExportMenuOpen] = useState(false);
     const [generatingToken, setGeneratingToken] = useState(false);
     const [sheetsConnected, setSheetsConnected] = useState(false);
     const [creatingSheet, setCreatingSheet] = useState(false);
@@ -515,50 +484,13 @@ export default function ManageEventDetailPage() {
 
                         {registrations.length > 0 && (
                             <div className="flex items-center gap-2">
-                            <div className="relative">
                                 <button
-                                    onClick={() => setExportMenuOpen((v) => !v)}
+                                    onClick={() => exportGoogleSheetStyleCSV(event, registrations as any[])}
                                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 border border-zinc-200 rounded-lg hover:bg-zinc-50 transition-colors"
                                 >
                                     <IconDownload size={13} />
                                     Export CSV
-                                    <IconChevronDown size={12} className="text-zinc-400" />
                                 </button>
-
-                                {exportMenuOpen && (
-                                    <>
-                                        <div className="fixed inset-0 z-10" onClick={() => setExportMenuOpen(false)} />
-                                        <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-zinc-200 rounded-xl shadow-lg z-20 py-1 overflow-hidden">
-                                            <button
-                                                onClick={() => {
-                                                    exportRegistrationsCSV(event, registrations as any[]);
-                                                    setExportMenuOpen(false);
-                                                }}
-                                                className="w-full text-left px-4 py-2.5 text-sm text-zinc-700 hover:bg-zinc-50"
-                                            >
-                                                <p className="font-medium">Registrations</p>
-                                                <p className="text-xs text-zinc-400 mt-0.5">
-                                                    One row per registration · includes form responses
-                                                </p>
-                                            </button>
-                                            {hasTeams && (
-                                                <button
-                                                    onClick={() => {
-                                                        exportAllParticipantsCSV(event, registrations as any[]);
-                                                        setExportMenuOpen(false);
-                                                    }}
-                                                    className="w-full text-left px-4 py-2.5 text-sm text-zinc-700 hover:bg-zinc-50 border-t border-zinc-100"
-                                                >
-                                                    <p className="font-medium">All Participants</p>
-                                                    <p className="text-xs text-zinc-400 mt-0.5">
-                                                        One row per person · expands team members
-                                                    </p>
-                                                </button>
-                                            )}
-                                        </div>
-                                    </>
-                                )}
-                            </div>
                             </div>
                         )}
                     </div>

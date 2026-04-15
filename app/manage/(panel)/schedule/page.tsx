@@ -51,10 +51,10 @@ function formatDateLabel(key: string): string {
 }
 
 function toMinutesFromMidnight(date: Date): number {
-    const d = new Date(date);
-    const hours = parseInt(d.toLocaleString("en-IN", { hour: "2-digit", hour12: false, timeZone: "Asia/Kolkata" }));
-    const mins = d.getMinutes();
-    return hours * 60 + mins;
+    // IST = UTC+5:30; derive hours and minutes consistently in IST
+    const istMs = new Date(date).getTime() + (5 * 60 + 30) * 60 * 1000;
+    const istDate = new Date(istMs);
+    return istDate.getUTCHours() * 60 + istDate.getUTCMinutes();
 }
 
 function formatTime(date: Date): string {
