@@ -23,10 +23,7 @@ export async function GET(req: Request) {
         if (search.length > 0) {
             // Escape special regex characters to prevent ReDoS attacks
             const safeSearch = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-            query.$or = [
-                { title: { $regex: safeSearch, $options: "i" } },
-                { description: { $regex: safeSearch, $options: "i" } },
-            ];
+            query.title = { $regex: safeSearch, $options: "i" };
         }
 
         const [data, total] = await Promise.all([
