@@ -31,32 +31,57 @@ async function logAudit(
     }
 }
 
-const UPDATE_FIELD_LABELS: Record<string, string> = {
-    title: "title",
-    description: "description",
-    rules: "rules",
-    venue: "venue",
-    price: "price",
-    capacity: "capacity",
-    type: "type",
-    category: "category",
-    date: "date",
-    slots: "slots",
-    rounds: "rounds",
-    customForm: "form fields",
-    registrationInstructions: "registration instructions",
-    whatsappLink: "WhatsApp link",
-    externalRegistrationUrl: "external registration URL",
-    coverImage: "cover image",
-    department: "department",
-    status: "status",
-};
+function normalizeArray(val: unknown): string {
+    if (!Array.isArray(val)) return "[]";
+    return JSON.stringify(
+        val.map((item: any) => {
+            if (typeof item === "object" && item !== null) {
+                const { _id, __v, registrationCount, ...rest } = item.toObject?.() ?? item;
+                // Normalize dates to ISO strings for stable comparison
+                for (const k of Object.keys(rest)) {
+                    if (rest[k] instanceof Date) rest[k] = rest[k].toISOString();
+                }
+                return rest;
+            }
+            return item;
+        })
+    );
+}
 
-function buildUpdateSummary(updates: Record<string, unknown>): string {
-    const changed = Object.keys(updates)
-        .filter((k) => k in UPDATE_FIELD_LABELS)
-        .map((k) => UPDATE_FIELD_LABELS[k]);
-    return changed.length > 0 ? `Updated: ${changed.join(", ")}` : "Updated event";
+function buildUpdateSummary(original: any, updates: Record<string, unknown>): string {
+    const changed: string[] = [];
+
+    const str = (v: unknown) => (v == null ? "" : String(v));
+    const num = (v: unknown) => Number(v ?? 0);
+
+    if ("title" in updates && str(updates.title) !== str(original.title)) changed.push("title");
+    if ("description" in updates && str(updates.description) !== str(original.description)) changed.push("description");
+    if ("rules" in updates && str(updates.rules) !== str(original.rules)) changed.push("rules");
+    if ("venue" in updates && str(updates.venue) !== str(original.venue)) changed.push("venue");
+    if ("price" in updates && num(updates.price) !== num(original.price)) changed.push("price");
+    if ("capacity" in updates && num(updates.capacity) !== num(original.capacity)) changed.push("capacity");
+    if ("type" in updates && str(updates.type) !== str(original.type)) changed.push("type");
+    if ("category" in updates && str(updates.category) !== str(original.category)) changed.push("category");
+    if ("coverImage" in updates && str(updates.coverImage) !== str(original.coverImage)) changed.push("cover image");
+    if ("registrationInstructions" in updates && str(updates.registrationInstructions) !== str(original.registrationInstructions)) changed.push("registration instructions");
+    if ("whatsappLink" in updates && str(updates.whatsappLink) !== str(original.whatsappLink)) changed.push("WhatsApp link");
+    if ("externalRegistrationUrl" in updates && str(updates.externalRegistrationUrl) !== str(original.externalRegistrationUrl)) changed.push("external registration URL");
+    if ("department" in updates && str(updates.department) !== str(original.department)) changed.push("department");
+
+    if ("date" in updates) {
+        const d = updates.date as any;
+        const origStart = new Date(original.date?.start).toISOString();
+        const origEnd = new Date(original.date?.end).toISOString();
+        if (new Date(d.start).toISOString() !== origStart || new Date(d.end).toISOString() !== origEnd) {
+            changed.push("date");
+        }
+    }
+
+    if ("slots" in updates && normalizeArray(updates.slots) !== normalizeArray(original.slots)) changed.push("slots");
+    if ("rounds" in updates && normalizeArray(updates.rounds) !== normalizeArray(original.rounds)) changed.push("rounds");
+    if ("customForm" in updates && normalizeArray(updates.customForm) !== normalizeArray(original.customForm)) changed.push("form fields");
+
+    return changed.length > 0 ? `Updated: ${changed.join(", ")}` : "Saved event (no changes detected)";
 }
 
 export async function getEventAuditLog(eventId: string) {
@@ -444,7 +469,7 @@ export async function updateEvent(id: string, formData: FormData) {
         returnDocument: "after",
     }).lean();
 
-    await logAudit(id, session, "update", buildUpdateSummary(updates));
+    await logAudit(id, session, "update", buildUpdateSummary(event, updates));
 
     return { success: true, data: serialize(updated) };
 }
