@@ -2,11 +2,72 @@
 "use server";
 
 import { connectDB } from "@/lib/db";
-import { Event, Category, Registration, Ticket } from "@/models";
+import { Event, Category, Registration, Ticket, EventAuditLog } from "@/models";
 import { requireManagement, requireDepartmentAccess, requireSuperAdmin } from "@/lib/auth-helpers";
+import type { Session } from "next-auth";
 import { createEventSchema, updateEventSchema, eventSlotSchema, eventRoundSchema } from "@/lib/validations";
 import { serialize, getPaginationParams } from "@/lib/utils";
 import type { EventFilters, PaginatedResponse, IEvent } from "@/types";
+
+// ─── Audit log helper ─────────────────────────────────────────────────────────
+
+async function logAudit(
+    eventId: string,
+    session: Session,
+    action: string,
+    summary: string
+) {
+    try {
+        await EventAuditLog.create({
+            eventId,
+            userId: session.user.id,
+            userName: session.user.name ?? "Unknown",
+            userEmail: session.user.email ?? "",
+            action,
+            summary,
+        });
+    } catch {
+        // Audit failures must never break the main operation
+    }
+}
+
+const UPDATE_FIELD_LABELS: Record<string, string> = {
+    title: "title",
+    description: "description",
+    rules: "rules",
+    venue: "venue",
+    price: "price",
+    capacity: "capacity",
+    type: "type",
+    category: "category",
+    date: "date",
+    slots: "slots",
+    rounds: "rounds",
+    customForm: "form fields",
+    registrationInstructions: "registration instructions",
+    whatsappLink: "WhatsApp link",
+    externalRegistrationUrl: "external registration URL",
+    coverImage: "cover image",
+    department: "department",
+    status: "status",
+};
+
+function buildUpdateSummary(updates: Record<string, unknown>): string {
+    const changed = Object.keys(updates)
+        .filter((k) => k in UPDATE_FIELD_LABELS)
+        .map((k) => UPDATE_FIELD_LABELS[k]);
+    return changed.length > 0 ? `Updated: ${changed.join(", ")}` : "Updated event";
+}
+
+export async function getEventAuditLog(eventId: string) {
+    await requireSuperAdmin();
+    await connectDB();
+    const logs = await EventAuditLog.find({ eventId })
+        .sort({ createdAt: -1 })
+        .limit(200)
+        .lean();
+    return { success: true, data: serialize(logs) };
+}
 
 export async function getEvents(
     filters: EventFilters = {}
@@ -232,6 +293,8 @@ export async function createEvent(formData: FormData) {
         })),
     });
 
+    await logAudit(event._id.toString(), session, "create", `Created event "${event.title}"`);
+
     return { success: true, data: serialize(event) };
 }
 
@@ -241,7 +304,7 @@ export async function updateEvent(id: string, formData: FormData) {
     const event = await Event.findById(id);
     if (!event) return { success: false, error: "Event not found." };
 
-    await requireDepartmentAccess(event.department.toString());
+    const session = await requireDepartmentAccess(event.department.toString());
 
     const raw = Object.fromEntries(formData.entries());
 
@@ -381,6 +444,8 @@ export async function updateEvent(id: string, formData: FormData) {
         returnDocument: "after",
     }).lean();
 
+    await logAudit(id, session, "update", buildUpdateSummary(updates));
+
     return { success: true, data: serialize(updated) };
 }
 
@@ -390,13 +455,14 @@ export async function cancelEvent(id: string) {
     const event = await Event.findById(id);
     if (!event) return { success: false, error: "Event not found." };
 
-    await requireDepartmentAccess(event.department.toString());
+    const session = await requireDepartmentAccess(event.department.toString());
 
     if (event.status !== "published") {
         return { success: false, error: "Only published events can be cancelled." };
     }
 
     await Event.findByIdAndUpdate(id, { status: "cancelled" });
+    await logAudit(id, session, "cancel", `Cancelled event "${event.title}"`);
 
     return { success: true };
 }
@@ -407,12 +473,13 @@ export async function deleteEvent(id: string) {
     const event = await Event.findById(id);
     if (!event) return { success: false, error: "Event not found." };
 
-    await requireDepartmentAccess(event.department.toString());
+    const session = await requireDepartmentAccess(event.department.toString());
 
     if (event.status === "published") {
         return { success: false, error: "Cancel the event before deleting it." };
     }
 
+    await logAudit(id, session, "delete", `Deleted event "${event.title}"`);
     await Ticket.deleteMany({ eventId: id });
     await Registration.deleteMany({ eventId: id });
     await Event.findByIdAndDelete(id);
@@ -426,11 +493,13 @@ export async function toggleRegistrations(id: string) {
     const event = await Event.findById(id);
     if (!event) return { success: false, error: "Event not found." };
 
-    await requireDepartmentAccess(event.department.toString());
+    const session = await requireDepartmentAccess(event.department.toString());
+    const willClose = !event.registrationsClosed;
 
-    await Event.findByIdAndUpdate(id, { registrationsClosed: !event.registrationsClosed });
+    await Event.findByIdAndUpdate(id, { registrationsClosed: willClose });
+    await logAudit(id, session, "toggle_registrations", willClose ? "Closed registrations" : "Reopened registrations");
 
-    return { success: true, registrationsClosed: !event.registrationsClosed };
+    return { success: true, registrationsClosed: willClose };
 }
 
 export async function publishEvent(id: string) {
@@ -439,9 +508,10 @@ export async function publishEvent(id: string) {
     const event = await Event.findById(id);
     if (!event) return { success: false, error: "Event not found." };
 
-    await requireDepartmentAccess(event.department.toString());
+    const session = await requireDepartmentAccess(event.department.toString());
 
     await Event.findByIdAndUpdate(id, { status: "published" });
+    await logAudit(id, session, "publish", `Published event "${event.title}"`);
 
     return { success: true };
 }

@@ -3,16 +3,18 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { getManageEvents, generateCsvToken, syncEventRegistrationCount } from "@/actions/events";
+import { getManageEvents, generateCsvToken, syncEventRegistrationCount, toggleRegistrations, publishEvent, cancelEvent, getEventAuditLog } from "@/actions/events";
 import { getEventRegistrations, toggleAttendance } from "@/actions/registrations";
 import { toast } from "sonner";
 import {
     IconEdit, IconArrowLeft, IconDownload,
     IconCalendarEvent, IconMapPin, IconUsers, IconCurrencyRupee,
-    IconLoader2, IconTableExport, IconRefresh, IconCopy,
+    IconLoader2, IconTableExport, IconCopy,
     IconBrandGoogle, IconExternalLink, IconUnlink,
+    IconLock, IconLockOpen, IconPlayerPlay, IconBan, IconActivity,
 } from "@tabler/icons-react";
 import type { IEvent, IRegistration } from "@/types";
 import "@uiw/react-markdown-preview/markdown.css";
@@ -115,16 +117,23 @@ function exportGoogleSheetStyleCSV(event: IEvent, registrations: any[]) {
 export default function ManageEventDetailPage() {
     const { id } = useParams<{ id: string }>();
     const router = useRouter();
+    const { data: session } = useSession();
+    const isSuperAdmin = session?.user?.role === "super_admin";
 
     const [event, setEvent] = useState<IEvent | null>(null);
     const [registrations, setRegistrations] = useState<IRegistration[]>([]);
     const [loading, setLoading] = useState(true);
     const [togglingId, setTogglingId] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<"overview" | "registrations">("overview");
+    const [activeTab, setActiveTab] = useState<"overview" | "registrations" | "activity">("overview");
+    const [auditLogs, setAuditLogs] = useState<any[]>([]);
+    const [loadingLogs, setLoadingLogs] = useState(false);
     const [generatingToken, setGeneratingToken] = useState(false);
     const [sheetsConnected, setSheetsConnected] = useState(false);
     const [creatingSheet, setCreatingSheet] = useState(false);
     const [unlinkingSheet, setUnlinkingSheet] = useState(false);
+    const [togglingRegs, setTogglingRegs] = useState(false);
+    const [publishingEvent, setPublishingEvent] = useState(false);
+    const [cancellingEvent, setCancellingEvent] = useState(false);
 
     useEffect(() => {
         async function load() {
@@ -148,6 +157,15 @@ export default function ManageEventDetailPage() {
         }
         load();
     }, [id]);
+
+    useEffect(() => {
+        if (activeTab !== "activity" || !isSuperAdmin) return;
+        setLoadingLogs(true);
+        getEventAuditLog(id).then((result) => {
+            if (result.success) setAuditLogs(result.data as any[]);
+            setLoadingLogs(false);
+        });
+    }, [activeTab, id, isSuperAdmin]);
 
     // Show a toast if returning from Google OAuth
     useEffect(() => {
@@ -205,6 +223,46 @@ export default function ManageEventDetailPage() {
         toast.success("Google account disconnected.");
     }
 
+    async function handleToggleRegistrations() {
+        if (!event) return;
+        setTogglingRegs(true);
+        const result = await toggleRegistrations(id);
+        setTogglingRegs(false);
+        if (result.success) {
+            setEvent((prev) => prev ? { ...prev, registrationsClosed: result.registrationsClosed } as any : prev);
+            toast.success(result.registrationsClosed ? "Registrations closed." : "Registrations reopened.");
+        } else {
+            toast.error((result as any).error ?? "Failed to update.");
+        }
+    }
+
+    async function handlePublish() {
+        if (!event) return;
+        setPublishingEvent(true);
+        const result = await publishEvent(id);
+        setPublishingEvent(false);
+        if (result.success) {
+            setEvent((prev) => prev ? { ...prev, status: "published" } as any : prev);
+            toast.success("Event published.");
+        } else {
+            toast.error((result as any).error ?? "Failed to publish.");
+        }
+    }
+
+    async function handleCancel() {
+        if (!event) return;
+        if (!window.confirm("Cancel this event? This cannot be undone.")) return;
+        setCancellingEvent(true);
+        const result = await cancelEvent(id);
+        setCancellingEvent(false);
+        if (result.success) {
+            setEvent((prev) => prev ? { ...prev, status: "cancelled" } as any : prev);
+            toast.success("Event cancelled.");
+        } else {
+            toast.error((result as any).error ?? "Failed to cancel.");
+        }
+    }
+
     async function handleToggleAttendance(ticketId: string) {
         setTogglingId(ticketId);
         const result = await toggleAttendance(ticketId);
@@ -256,13 +314,51 @@ export default function ManageEventDetailPage() {
                     <IconArrowLeft size={16} />
                     Back
                 </button>
-                <Link
-                    href={`/manage/events/${id}/edit`}
-                    className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-zinc-700 border border-zinc-200 rounded-lg hover:bg-zinc-50 transition-colors"
-                >
-                    <IconEdit size={15} />
-                    Edit Event
-                </Link>
+                <div className="flex items-center gap-2 flex-wrap">
+                    {event.status === "draft" && (
+                        <button
+                            onClick={handlePublish}
+                            disabled={publishingEvent}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                            {publishingEvent ? <IconLoader2 size={15} className="animate-spin" /> : <IconPlayerPlay size={15} />}
+                            Publish
+                        </button>
+                    )}
+                    {event.status === "published" && (
+                        <>
+                            <button
+                                onClick={handleToggleRegistrations}
+                                disabled={togglingRegs}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-zinc-700 border border-zinc-200 rounded-lg hover:bg-zinc-50 transition-colors disabled:opacity-50"
+                            >
+                                {togglingRegs ? (
+                                    <IconLoader2 size={15} className="animate-spin" />
+                                ) : event.registrationsClosed ? (
+                                    <IconLockOpen size={15} />
+                                ) : (
+                                    <IconLock size={15} />
+                                )}
+                                {event.registrationsClosed ? "Reopen Registrations" : "Close Registrations"}
+                            </button>
+                            <button
+                                onClick={handleCancel}
+                                disabled={cancellingEvent}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
+                            >
+                                {cancellingEvent ? <IconLoader2 size={15} className="animate-spin" /> : <IconBan size={15} />}
+                                Cancel Event
+                            </button>
+                        </>
+                    )}
+                    <Link
+                        href={`/manage/events/${id}/edit`}
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-zinc-700 border border-zinc-200 rounded-lg hover:bg-zinc-50 transition-colors"
+                    >
+                        <IconEdit size={15} />
+                        Edit Event
+                    </Link>
+                </div>
             </div>
 
             {/* Google Sheets integration */}
@@ -355,6 +451,12 @@ export default function ManageEventDetailPage() {
                                 }`}>{event.status}</span>
                                 <span className="text-xs px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 capitalize">{event.type}</span>
                                 <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 capitalize">{event.category}</span>
+                                {event.status === "published" && event.registrationsClosed && (
+                                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 flex items-center gap-1">
+                                        <IconLock size={10} />
+                                        registrations closed
+                                    </span>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -398,10 +500,10 @@ export default function ManageEventDetailPage() {
 
             {/* Tabs */}
             <div className="flex gap-1 border-b border-zinc-200">
-                {(["overview", "registrations"] as const).map((tab) => (
+                {(["overview", "registrations", ...(isSuperAdmin ? ["activity"] : [])] as const).map((tab) => (
                     <button
                         key={tab}
-                        onClick={() => setActiveTab(tab)}
+                        onClick={() => setActiveTab(tab as any)}
                         className={`px-4 py-2.5 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${
                             activeTab === tab
                                 ? "border-orange-500 text-orange-600"
@@ -445,6 +547,14 @@ export default function ManageEventDetailPage() {
                             </p>
                         </div>
                     )}
+                    {(event as any).registrationInstructions && (
+                        <div className="bg-white rounded-xl border border-zinc-200 p-5">
+                            <h3 className="text-sm font-semibold text-zinc-900 mb-3">Registration Instructions</h3>
+                            <div className="prose prose-sm max-w-none" data-color-mode="light">
+                                <MDPreview source={(event as any).registrationInstructions} />
+                            </div>
+                        </div>
+                    )}
                     {event.customForm?.length > 0 && (
                         <div className="bg-white rounded-xl border border-zinc-200 p-5">
                             <h3 className="text-sm font-semibold text-zinc-900 mb-3">Registration Form Fields</h3>
@@ -462,6 +572,53 @@ export default function ManageEventDetailPage() {
                                 ))}
                             </div>
                         </div>
+                    )}
+                </div>
+            )}
+
+            {/* Activity tab — super_admin only */}
+            {activeTab === "activity" && isSuperAdmin && (
+                <div className="bg-white rounded-xl border border-zinc-200">
+                    <div className="flex items-center gap-2 px-5 py-4 border-b border-zinc-100">
+                        <IconActivity size={15} className="text-zinc-400" />
+                        <p className="text-sm font-semibold text-zinc-900">Edit History</p>
+                    </div>
+                    {loadingLogs ? (
+                        <div className="px-5 py-10 text-center">
+                            <IconLoader2 size={20} className="animate-spin text-zinc-300 mx-auto" />
+                        </div>
+                    ) : auditLogs.length === 0 ? (
+                        <div className="px-5 py-10 text-center">
+                            <p className="text-sm text-zinc-400">No activity recorded yet.</p>
+                        </div>
+                    ) : (
+                        <ul className="divide-y divide-zinc-100">
+                            {auditLogs.map((log: any) => (
+                                <li key={log._id} className="px-5 py-3.5 flex items-start gap-3">
+                                    <div className="mt-0.5 w-7 h-7 rounded-full bg-zinc-100 flex items-center justify-center shrink-0 text-zinc-500">
+                                        {log.action === "create" && <IconPlayerPlay size={13} />}
+                                        {log.action === "update" && <IconEdit size={13} />}
+                                        {log.action === "publish" && <IconPlayerPlay size={13} className="text-green-600" />}
+                                        {log.action === "cancel" && <IconBan size={13} className="text-red-500" />}
+                                        {log.action === "delete" && <IconBan size={13} className="text-red-600" />}
+                                        {log.action === "toggle_registrations" && <IconLock size={13} className="text-amber-500" />}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm text-zinc-800">{log.summary}</p>
+                                        <p className="text-xs text-zinc-400 mt-0.5">
+                                            {log.userName}
+                                            <span className="mx-1.5 text-zinc-300">·</span>
+                                            {log.userEmail}
+                                            <span className="mx-1.5 text-zinc-300">·</span>
+                                            {new Date(log.createdAt).toLocaleString("en-IN", {
+                                                day: "numeric", month: "short", year: "numeric",
+                                                hour: "2-digit", minute: "2-digit",
+                                            })}
+                                        </p>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
                     )}
                 </div>
             )}

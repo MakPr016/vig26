@@ -8,3 +8,4 @@ export { default as Event } from "./Event";
 export { default as Registration } from "./Registration";
 export { default as Ticket } from "./Ticket";
 export { default as Invite } from "./Invite";
+export { default as EventAuditLog } from "./EventAuditLog";
