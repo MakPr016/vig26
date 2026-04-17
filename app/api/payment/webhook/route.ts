@@ -212,7 +212,7 @@ async function confirmPayment(orderId: string, paidAmount: number, provider: str
                     .populate("userId", "name email collegeId")
                     .populate("teamMembers.userId", "name email collegeId")
                     .lean();
-                const { appendRegistrationRow } = await import("@/lib/sheets");
+                const { appendRegistrationRow, syncCategoryEventsSheet } = await import("@/lib/sheets");
                 await Promise.race([
                     appendRegistrationRow(
                         (event as any).googleSheetId,
@@ -225,6 +225,15 @@ async function confirmPayment(orderId: string, paidAmount: number, provider: str
                         setTimeout(() => reject(new Error("Sheet sync timeout")), 8000)
                     ),
                 ]);
+
+                // Update Events Overview with new registration count
+                const allCatEvents = await Event.find({ category: (event as any).category })
+                    .populate("department", "name").lean();
+                await syncCategoryEventsSheet(
+                    (event as any).googleSheetId,
+                    allCatEvents,
+                    sheetsRefreshToken
+                ).catch((e: any) => console.error("[webhook] Overview sync failed:", e?.message));
             } catch (sheetErr) {
                 console.error("[webhook] Sheet sync failed (non-fatal):", sheetErr);
             }

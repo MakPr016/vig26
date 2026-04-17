@@ -338,7 +338,7 @@ export async function POST(req: Request) {
                     .populate("teamMembers.userId", "name email collegeId")
                     .lean();
 
-                const { appendRegistrationRow } = await import("@/lib/sheets");
+                const { appendRegistrationRow, syncCategoryEventsSheet } = await import("@/lib/sheets");
                 await Promise.race([
                     appendRegistrationRow(
                         (event as any).googleSheetId,
@@ -351,6 +351,15 @@ export async function POST(req: Request) {
                         setTimeout(() => reject(new Error("Sheet sync timeout")), 8000)
                     ),
                 ]);
+
+                // Update Events Overview with new registration count
+                const allCatEvents = await Event.find({ category: (event as any).category })
+                    .populate("department", "name").lean();
+                await syncCategoryEventsSheet(
+                    (event as any).googleSheetId,
+                    allCatEvents,
+                    refreshToken
+                ).catch((e: any) => console.error("[payment/verify] Overview sync failed:", e?.message));
             } catch (sheetErr: any) {
                 console.error("[payment/verify] Sheet sync failed (non-fatal):", sheetErr?.message);
             }

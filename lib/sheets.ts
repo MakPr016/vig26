@@ -184,6 +184,32 @@ export async function createEventTab(
 }
 
 /**
+ * Deletes the sheet tab with the given title from a spreadsheet.
+ * No-ops silently if the tab doesn't exist.
+ */
+export async function deleteEventTab(
+    spreadsheetId: string,
+    tabTitle: string,
+    refreshToken?: string
+): Promise<void> {
+    const auth = getAuth(refreshToken);
+    const sheets = google.sheets({ version: "v4", auth });
+
+    const meta = await sheets.spreadsheets.get({ spreadsheetId });
+    const sheet = (meta.data.sheets ?? []).find(
+        (s) => s.properties?.title === tabTitle
+    );
+    if (!sheet?.properties?.sheetId) return;
+
+    await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+            requests: [{ deleteSheet: { sheetId: sheet.properties.sheetId } }],
+        },
+    });
+}
+
+/**
  * Appends a single registration row to the event's tab.
  * Called after payment confirmation (paid events) or immediately (free events).
  */

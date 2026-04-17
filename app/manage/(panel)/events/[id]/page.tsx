@@ -13,7 +13,7 @@ import {
     IconEdit, IconArrowLeft, IconDownload,
     IconCalendarEvent, IconMapPin, IconUsers, IconCurrencyRupee,
     IconLoader2, IconTableExport, IconCopy,
-    IconBrandGoogle, IconExternalLink, IconUnlink,
+    IconBrandGoogle, IconExternalLink, IconUnlink, IconRefresh,
     IconLock, IconLockOpen, IconPlayerPlay, IconBan, IconActivity,
 } from "@tabler/icons-react";
 import type { IEvent, IRegistration } from "@/types";
@@ -131,6 +131,7 @@ export default function ManageEventDetailPage() {
     const [sheetsConnected, setSheetsConnected] = useState(false);
     const [creatingSheet, setCreatingSheet] = useState(false);
     const [unlinkingSheet, setUnlinkingSheet] = useState(false);
+    const [syncingSheet, setSyncingSheet] = useState(false);
     const [togglingRegs, setTogglingRegs] = useState(false);
     const [publishingEvent, setPublishingEvent] = useState(false);
     const [cancellingEvent, setCancellingEvent] = useState(false);
@@ -196,6 +197,23 @@ export default function ManageEventDetailPage() {
             toast.error("Failed to create sheet.");
         } finally {
             setCreatingSheet(false);
+        }
+    }
+
+    async function handleSyncSheet() {
+        setSyncingSheet(true);
+        try {
+            const res = await fetch(`/api/events/${id}/sheet`, { method: "PATCH" });
+            const json = await res.json();
+            if (json.success) {
+                toast.success(`Sheet synced — ${json.synced} registration${json.synced !== 1 ? "s" : ""} written.`);
+            } else {
+                toast.error(json.error ?? "Sync failed.");
+            }
+        } catch {
+            toast.error("Sync failed.");
+        } finally {
+            setSyncingSheet(false);
         }
     }
 
@@ -391,6 +409,15 @@ export default function ManageEventDetailPage() {
                                     <IconExternalLink size={13} />
                                     Open Sheet
                                 </a>
+                                <button
+                                    onClick={handleSyncSheet}
+                                    disabled={syncingSheet}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 border border-zinc-200 rounded-lg hover:bg-zinc-50 transition-colors disabled:opacity-50"
+                                    title="Re-sync all confirmed registrations and the Events Overview tab"
+                                >
+                                    {syncingSheet ? <IconLoader2 size={13} className="animate-spin" /> : <IconRefresh size={13} />}
+                                    {syncingSheet ? "Syncing…" : "Sync Sheet"}
+                                </button>
                                 <button
                                     onClick={handleUnlinkSheet}
                                     disabled={unlinkingSheet}

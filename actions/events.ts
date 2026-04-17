@@ -590,10 +590,33 @@ export async function deleteEvent(id: string) {
     }
 
     const categorySlug = event.category;
+    const sheetId: string | undefined = (event as any).googleSheetId ?? undefined;
+    const sheetTabName: string | undefined = (event as any).sheetTabName ?? undefined;
+
     await logAudit(id, session, "delete", `Deleted event "${event.title}"`);
     await Ticket.deleteMany({ eventId: id });
     await Registration.deleteMany({ eventId: id });
     await Event.findByIdAndDelete(id);
+
+    // Delete the event's sheet tab (non-fatal)
+    if (sheetId && sheetTabName) {
+        void (async () => {
+            try {
+                const { Category } = await import("@/models");
+                const cat = await Category.findOne({ slug: categorySlug }).lean();
+                const tokenHolder = (cat as any)?.sheetOwner;
+                const tokenUser = tokenHolder
+                    ? await User.findById(tokenHolder).select("+googleSheetsRefreshToken").lean()
+                    : null;
+                const refreshToken = (tokenUser as any)?.googleSheetsRefreshToken as string | undefined;
+                const { deleteEventTab } = await import("@/lib/sheets");
+                await deleteEventTab(sheetId, sheetTabName, refreshToken);
+            } catch (err: any) {
+                console.error("[deleteEvent] Sheet tab deletion failed (non-fatal):", err?.message);
+            }
+        })();
+    }
+
     void syncCategoryOverviewSheet(categorySlug);
 
     return { success: true };
