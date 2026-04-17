@@ -150,6 +150,9 @@ export default function EventDetailPage() {
                                     {" · "}
                                     {start.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })}
                                     {" – "}
+                                    {start.toDateString() !== end.toDateString() && (
+                                        end.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "long", timeZone: "Asia/Kolkata" }) + ", "
+                                    )}
                                     {end.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })}
                                 </span>
                             </div>
@@ -336,6 +339,9 @@ export default function EventDetailPage() {
                                     <div>
                                         <p className="font-medium text-zinc-700">
                                             {start.toLocaleDateString("en-IN", { day: "numeric", month: "long", timeZone: "Asia/Kolkata" })}
+                                            {start.toDateString() !== end.toDateString() && (
+                                                " – " + end.toLocaleDateString("en-IN", { day: "numeric", month: "long", timeZone: "Asia/Kolkata" })
+                                            )}
                                         </p>
                                         <p className="text-xs mt-0.5">
                                             {start.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })} –{" "}
