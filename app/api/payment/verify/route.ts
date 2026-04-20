@@ -303,6 +303,9 @@ export async function POST(req: Request) {
                                     memberName: member.name,
                                     leaderName: session.user.name ?? "Your team leader",
                                     eventTitle: event.title,
+                                    eventDate: formatEventDate(event.date.start, event.date.end),
+                                    venue: event.venue ?? undefined,
+                                    ticketId: memberQR,
                                 })
                             );
                         }

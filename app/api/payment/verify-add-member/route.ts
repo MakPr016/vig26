@@ -92,6 +92,9 @@ export async function POST(req: Request) {
                     memberName,
                     leaderName: (leader as any)?.name ?? "Your team leader",
                     eventTitle: event.title,
+                    eventDate: formatEventDate(event.date.start, event.date.end),
+                    venue: event.venue ?? undefined,
+                    ticketId: memberQR,
                 });
             } catch (err: any) {
                 console.error("[verify-add-member] invite email failed:", err?.message);

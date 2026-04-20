@@ -165,6 +165,9 @@ export async function POST(req: Request) {
                                 memberName: member.name,
                                 leaderName: user.name,
                                 eventTitle: event.title,
+                                eventDate,
+                                venue: event.venue ?? undefined,
+                                ticketId: memberQR,
                             })
                         );
                     }

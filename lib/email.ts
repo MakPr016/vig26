@@ -155,18 +155,35 @@ export async function sendTeamMemberInviteEmail({
   memberName,
   leaderName,
   eventTitle,
+  eventDate,
+  venue,
+  ticketId,
 }: {
   to: string;
   memberName: string;
   leaderName: string;
   eventTitle: string;
+  eventDate: string;
+  venue?: string;
+  ticketId: string;
 }) {
   const signupLink = `${APP_URL}/auth/signup`;
+  const cid = "qrcode@vigyanrang";
+
+  const qrBuffer = await generateTicketQRBuffer(ticketId);
 
   const { error: teamError } = await resend.emails.send({
     from: FROM,
     to,
-    subject: `${leaderName} added you to a team for ${eventTitle}`,
+    subject: `${leaderName} added you to a team for ${eventTitle} — your ticket is inside`,
+    attachments: [
+      {
+        filename: "ticket-qr.png",
+        content: qrBuffer,
+        contentType: "image/png",
+        contentId: cid,
+      },
+    ],
     html: `
       <div style="background-color: #f9fafb; padding: 40px 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
         <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 40px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
@@ -176,16 +193,57 @@ export async function sendTeamMemberInviteEmail({
           <p style="font-size: 16px; line-height: 24px; color: #374151;">
             Great news! <span style="font-weight: 600; color: #111827;">${leaderName}</span> has registered you as a team member for <strong>${eventTitle}</strong>.
           </p>
-          <p style="font-size: 16px; color: #374151; margin: 24px 0;">To access your ticket and event details, please create your Vigyaanrang account:</p>
+
+          <!-- Event card -->
+          <div style="background-color: #fffaf5; border: 1px solid #ffedd5; border-radius: 8px; padding: 20px; margin: 24px 0;">
+            <h3 style="margin: 0 0 12px 0; font-size: 18px; color: #111827;">${eventTitle}</h3>
+            <p style="color: #6b7280; font-size: 14px; margin: 0 0 6px 0;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;margin-right:6px;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              ${eventDate}
+            </p>
+            ${venue ? `<p style="color: #6b7280; font-size: 14px; margin: 6px 0 0 0;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;margin-right:6px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              ${venue}
+            </p>` : ""}
+          </div>
+
+          <!-- QR code -->
+          <div style="text-align: center; margin: 32px 0;">
+            <p style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 16px;">Your Entry QR Code</p>
+            <img
+              src="cid:${cid}"
+              alt="QR Code"
+              width="200"
+              height="200"
+              style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px; display: block; margin: 0 auto;"
+            />
+            <p style="color: #9ca3af; font-size: 11px; margin-top: 12px; font-family: monospace;">
+              Ticket ID: ${ticketId}
+            </p>
+          </div>
+
+          <p style="font-size: 14px; color: #6b7280; text-align: center; margin-bottom: 28px;">
+            Show this QR code at the entrance for a smooth check-in.<br/>
+            If the QR is not visible, open the attached <strong>ticket-qr.png</strong> file.
+          </p>
+
+          <div style="height: 1px; background-color: #f3f4f6; margin: 28px 0;"></div>
+
+          <p style="font-size: 14px; color: #6b7280; margin-bottom: 16px;">
+            Create a Vigyaanrang account to view your ticket and event details on your dashboard:
+          </p>
           <a href="${signupLink}" style="display: inline-block; background-color: #18181B; color: #ffffff; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 600;">
             Create My Account
           </a>
-          <div style="margin-top: 32px; padding: 16px; background-color: #f3f4f6; border-radius: 8px;">
+          <div style="margin-top: 24px; padding: 16px; background-color: #f3f4f6; border-radius: 8px;">
             <p style="color: #4b5563; font-size: 13px; margin: 0; line-height: 20px;">
               <strong>Important:</strong> Use the same email address this was sent to (${to}) when signing up so your ticket is linked correctly.
             </p>
           </div>
         </div>
+        <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 24px;">
+          Sent by <a href="${APP_URL}" style="color: #9ca3af; text-decoration: underline;">Vigyaanrang</a>
+        </p>
       </div>
     `,
   });

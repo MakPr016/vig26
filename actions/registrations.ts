@@ -207,11 +207,17 @@ export async function createRegistration(input: unknown) {
                 });
             } else {
                 try {
+                    const memberEmailDate = chosenSlot
+                        ? formatEventDate(chosenSlot.start, chosenSlot.end)
+                        : formatEventDate(event.date.start, event.date.end);
                     await sendTeamMemberInviteEmail({
                         to: member.email,
                         memberName: member.name,
                         leaderName: session.user.name ?? "Your team leader",
                         eventTitle: event.title,
+                        eventDate: memberEmailDate,
+                        venue: event.venue ?? undefined,
+                        ticketId: memberQR,
                     });
                 } catch (err: any) {
                     console.error("[createRegistration] member invite email failed:", member.email, err?.message);
@@ -391,6 +397,9 @@ export async function addTeamMember(registrationId: string, member: { name: stri
                 memberName: member.name,
                 leaderName: (leaderUser as any)?.name ?? "Your team leader",
                 eventTitle: event.title,
+                eventDate: formatEventDate(event.date.start, event.date.end),
+                venue: event.venue ?? undefined,
+                ticketId: memberQR,
             });
         } catch (err: any) {
             console.error("[addTeamMember] invite email failed:", err?.message);

@@ -2,6 +2,7 @@ import { connectDB } from "@/lib/db";
 import { User } from "@/models";
 import { hashPassword } from "@/lib/utils";
 import { signupSchema } from "@/lib/validations";
+import { linkUnclaimedTickets } from "@/lib/link-tickets";
 import { checkRateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 
 export async function POST(req: Request) {
@@ -38,7 +39,7 @@ export async function POST(req: Request) {
         // ── Create student account ─────────────────────────────────────────────
         const passwordHash = await hashPassword(password);
 
-        await User.create({
+        const newUser = await User.create({
             name,
             email,
             passwordHash,
@@ -47,6 +48,12 @@ export async function POST(req: Request) {
             departments: [],
             registeredEvents: [],
         });
+
+        // Link any team-registration tickets that were left unlinked because
+        // this member had no account when the team leader paid.
+        linkUnclaimedTickets(email, newUser._id.toString()).catch((err) =>
+            console.error("[signup] linkUnclaimedTickets failed:", err?.message)
+        );
 
         return Response.json(
             { success: true, message: "Account created. You can now sign in." },

@@ -5,6 +5,7 @@ import GoogleProvider from "next-auth/providers/google";
 import { connectDB } from "@/lib/db";
 import { User } from "@/models";
 import { verifyPassword } from "@/lib/utils";
+import { linkUnclaimedTickets } from "@/lib/link-tickets";
 import type { UserRole } from "@/types";
 
 export const authOptions: NextAuthOptions = {
@@ -102,7 +103,7 @@ export const authOptions: NextAuthOptions = {
                     }
                 } else {
                     // New user via Google — create student account
-                    await User.create({
+                    const newUser = await User.create({
                         name: user.name ?? undefined,
                         email: user.email ?? undefined,
                         googleId: account.providerAccountId,
@@ -110,6 +111,13 @@ export const authOptions: NextAuthOptions = {
                         departments: [],
                         registeredEvents: [],
                     });
+
+                    // Link any team-registration tickets that were waiting for this email
+                    if (user.email) {
+                        linkUnclaimedTickets(user.email, newUser._id.toString()).catch((err) =>
+                            console.error("[google-signin] linkUnclaimedTickets failed:", err?.message)
+                        );
+                    }
                 }
             }
             return true;
