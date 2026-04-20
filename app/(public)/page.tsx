@@ -125,7 +125,7 @@ export default function CubePage() {
             Browse Events
           </Link>
           <a
-            href="https://cepheus-2.devfolio.co/overview"
+            href="https://vigyaanrang.atria.edu.in/events/cepheus-20"
             target="_blank"
             rel="noopener noreferrer"
             className="px-6 py-3 font-semibold rounded-xl border transition-colors"

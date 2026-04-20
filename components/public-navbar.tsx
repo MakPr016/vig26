@@ -298,7 +298,7 @@ export function PublicNavbar() {
                         <div className="vr-link-clip overflow-hidden border-b border-white/5">
                             <div className="vr-link-inner">
                                 <a
-                                    href="https://cepheus-2.devfolio.co/overview"
+                                    href="https://vigyaanrang.atria.edu.in/events/cepheus-20"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     onClick={closeMenu}
