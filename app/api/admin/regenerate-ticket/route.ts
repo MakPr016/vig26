@@ -56,9 +56,12 @@ export async function GET(req: Request) {
         }
 
         const tickets = await Ticket.find({ registrationId: registration._id })
-            .populate("userId", "name email");
+            .populate("userId", "name email")
+            .sort({ _id: 1 });
 
         const event = registration.eventId as any;
+        const teamMembers: any[] = registration.teamMembers ?? [];
+        const memberTickets = tickets.filter((t: any) => t.teamRole === "member");
 
         return Response.json({
             success: true,
@@ -79,14 +82,31 @@ export async function GET(req: Request) {
                     email: (registration.userId as any)?.email ?? null,
                     collegeId: (registration.userId as any)?.collegeId ?? null,
                 },
-                tickets: tickets.map((t: any) => ({
-                    ticketId: t._id.toString(),
-                    qrCode: t.qrCode,
-                    teamRole: t.teamRole,
-                    attendanceStatus: t.attendanceStatus,
-                    recipientName: (t.userId as any)?.name ?? null,
-                    recipientEmail: (t.userId as any)?.email ?? null,
-                })),
+                tickets: tickets.map((t: any) => {
+                    let recipientName = (t.userId as any)?.name ?? null;
+                    let recipientEmail = (t.userId as any)?.email ?? null;
+                    const hasAccount = !!(t.userId as any)?._id;
+
+                    if (!t.userId && t.teamRole === "member") {
+                        const memberIdx = memberTickets.findIndex(
+                            (mt: any) => mt._id.toString() === t._id.toString()
+                        );
+                        if (memberIdx !== -1 && teamMembers[memberIdx]) {
+                            recipientEmail = teamMembers[memberIdx].email ?? null;
+                            recipientName = teamMembers[memberIdx].name ?? null;
+                        }
+                    }
+
+                    return {
+                        ticketId: t._id.toString(),
+                        qrCode: t.qrCode,
+                        teamRole: t.teamRole,
+                        attendanceStatus: t.attendanceStatus,
+                        recipientName,
+                        recipientEmail,
+                        hasAccount,
+                    };
+                }),
             },
         });
     } catch (err: any) {

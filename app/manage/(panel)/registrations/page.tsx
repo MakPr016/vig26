@@ -1,17 +1,19 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 import { getAllRegistrationsAdmin, cancelRegistrationAdmin } from "@/actions/admin";
 import {
     IconSearch,
     IconDownload,
     IconChevronLeft,
     IconChevronRight,
+    IconChevronDown,
     IconFilter,
     IconLoader2,
     IconX,
     IconCopy,
     IconCheck,
+    IconTicket,
 } from "@tabler/icons-react";
 import {
     Select,
@@ -99,12 +101,96 @@ function downloadCSV(rows: any[]) {
     URL.revokeObjectURL(url);
 }
 
+function TicketAccordion({ reg, onCancel, cancelling }: {
+    reg: any;
+    onCancel: (id: string) => void;
+    cancelling: string | null;
+}) {
+    const tickets: any[] = (reg.tickets ?? [])
+        .slice()
+        .sort((a: any, b: any) => a._id.localeCompare(b._id));
+
+    const memberTickets = tickets.filter((t) => t.teamRole === "member");
+    const teamMembers: any[] = reg.teamMembers ?? [];
+
+    return (
+        <div className="px-5 pb-4 pt-0">
+            <div className="border border-zinc-100 rounded-lg overflow-hidden divide-y divide-zinc-100">
+                {tickets.length === 0 ? (
+                    <p className="px-4 py-3 text-xs text-zinc-400 italic">No tickets found.</p>
+                ) : tickets.map((t: any) => {
+                    let displayEmail: string | null = t.userId?.email ?? null;
+                    let displayName: string | null = t.userId?.name ?? null;
+                    const hasAccount = !!t.userId?._id || !!t.userId?.email;
+
+                    if (!hasAccount && t.teamRole === "member") {
+                        const memberIdx = memberTickets.findIndex((mt: any) => mt._id === t._id);
+                        const member = teamMembers[memberIdx];
+                        if (member) {
+                            displayEmail = member.email ?? null;
+                            displayName = member.name ?? null;
+                        }
+                    }
+
+                    return (
+                        <div key={t._id} className="px-4 py-3 flex items-center gap-3 text-sm bg-white hover:bg-zinc-50/50 transition-colors">
+                            <span className="text-[11px] px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-500 capitalize shrink-0">
+                                {t.teamRole}
+                            </span>
+                            <div className="flex items-center gap-0.5 shrink-0">
+                                <span title={t.qrCode} className="text-xs font-mono text-zinc-400">
+                                    {t.qrCode?.slice(0, 10)}…
+                                </span>
+                                <CopyButton text={t.qrCode} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                {displayName ? (
+                                    <p className="text-zinc-700 truncate">{displayName}</p>
+                                ) : null}
+                                {displayEmail ? (
+                                    <p className={`text-xs truncate ${hasAccount ? "text-zinc-400" : "text-amber-500"}`}>
+                                        {displayEmail}
+                                        {!hasAccount && (
+                                            <span className="ml-1 font-medium">· no account</span>
+                                        )}
+                                    </p>
+                                ) : (
+                                    <p className="text-xs text-zinc-300 italic">No user linked</p>
+                                )}
+                            </div>
+                            {t.attendanceStatus && (
+                                <span className="text-xs px-1.5 py-0.5 rounded bg-green-50 text-green-600 shrink-0">
+                                    checked in
+                                </span>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+
+            {reg.status !== "cancelled" && (
+                <div className="mt-3 flex items-center gap-2">
+                    <button
+                        onClick={() => onCancel(reg._id)}
+                        disabled={cancelling === reg._id}
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 border border-red-200 rounded-md hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                        <IconX size={11} />
+                        {cancelling === reg._id ? "Cancelling…" : "Cancel Registration"}
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function RegistrationsPage() {
     const [statusTab, setStatusTab] = useState<StatusTab>("all");
     const [paymentStatus, setPaymentStatus] = useState("all");
     const [search, setSearch] = useState("");
     const [searchInput, setSearchInput] = useState("");
     const [page, setPage] = useState(1);
+    const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
     const [data, setData] = useState<any[]>([]);
     const [total, setTotal] = useState(0);
@@ -134,8 +220,16 @@ export default function RegistrationsPage() {
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
-    // Reset to page 1 when filters change
     useEffect(() => { setPage(1); }, [statusTab, paymentStatus, search]);
+
+    function toggleRow(id: string) {
+        setExpandedRows((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    }
 
     async function handleCancel(id: string) {
         if (!confirm("Cancel this registration? This cannot be undone.")) return;
@@ -178,7 +272,6 @@ export default function RegistrationsPage() {
 
             {/* Filters */}
             <div className="flex flex-col sm:flex-row gap-3">
-                {/* Status tabs */}
                 <div className="flex gap-1 bg-zinc-100 p-1 rounded-lg self-start">
                     {STATUS_TABS.map((s) => (
                         <button
@@ -252,108 +345,99 @@ export default function RegistrationsPage() {
                             <thead>
                                 <tr className="border-b border-zinc-100 bg-zinc-50/50">
                                     <th className="text-left px-5 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Participant</th>
-                                    <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Tickets</th>
                                     <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Event</th>
                                     <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Type</th>
                                     <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Status</th>
                                     <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Payment</th>
                                     <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Transaction ID</th>
                                     <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Registered</th>
-                                    <th className="px-4 py-3"></th>
+                                    <th className="px-4 py-3 w-10"></th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-zinc-100">
-                                {data.map((reg: any) => (
-                                    <tr key={reg._id} className="hover:bg-zinc-50 transition-colors">
-                                        <td className="px-5 py-3.5">
-                                            <p className="font-medium text-zinc-900">{reg.userId?.name ?? "—"}</p>
-                                            <p className="text-xs text-zinc-400">{reg.userId?.email ?? "—"}</p>
-                                            {reg.userId?.collegeId && (
-                                                <p className="text-xs text-zinc-400 font-mono">{reg.userId.collegeId}</p>
+                            <tbody>
+                                {data.map((reg: any) => {
+                                    const isExpanded = expandedRows.has(reg._id);
+                                    const ticketCount = reg.tickets?.length ?? 0;
+                                    return (
+                                        <Fragment key={reg._id}>
+                                            <tr
+                                                className={`border-t border-zinc-100 hover:bg-zinc-50 transition-colors cursor-pointer ${isExpanded ? "bg-zinc-50/50" : ""}`}
+                                                onClick={() => toggleRow(reg._id)}
+                                            >
+                                                <td className="px-5 py-3.5">
+                                                    <p className="font-medium text-zinc-900">{reg.userId?.name ?? "—"}</p>
+                                                    <p className="text-xs text-zinc-400">{reg.userId?.email ?? "—"}</p>
+                                                    {reg.userId?.collegeId && (
+                                                        <p className="text-xs text-zinc-400 font-mono">{reg.userId.collegeId}</p>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-3.5 text-zinc-600 max-w-44">
+                                                    {reg.eventId?._id ? (
+                                                        <a
+                                                            href={`/manage/events/${reg.eventId._id}`}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="hover:text-orange-600 hover:underline line-clamp-2"
+                                                        >
+                                                            {reg.eventId.title}
+                                                        </a>
+                                                    ) : "—"}
+                                                </td>
+                                                <td className="px-4 py-3.5 text-xs text-zinc-500 whitespace-nowrap">
+                                                    {reg.isTeamRegistration ? (
+                                                        <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">Team</span>
+                                                    ) : (
+                                                        <span className="bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full font-medium">Individual</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-3.5">{statusBadge(reg.status)}</td>
+                                                <td className="px-4 py-3.5">{paymentBadge(reg.paymentStatus)}</td>
+                                                <td className="px-4 py-3.5 text-xs text-zinc-500 font-mono">
+                                                    {reg.paymentId ?? "—"}
+                                                </td>
+                                                <td className="px-4 py-3.5 text-xs text-zinc-400 whitespace-nowrap">
+                                                    {new Date(reg.createdAt).toLocaleDateString("en-IN", {
+                                                        day: "numeric", month: "short", year: "numeric",
+                                                    })}
+                                                    <br />
+                                                    <span className="text-zinc-300">
+                                                        {new Date(reg.createdAt).toLocaleTimeString("en-IN", {
+                                                            hour: "2-digit", minute: "2-digit",
+                                                        })}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3.5 text-right">
+                                                    <div className="flex items-center justify-end gap-1.5">
+                                                        {ticketCount > 0 && (
+                                                            <span className="text-[10px] text-zinc-400 flex items-center gap-0.5">
+                                                                <IconTicket size={11} />{ticketCount}
+                                                            </span>
+                                                        )}
+                                                        <IconChevronDown
+                                                            size={15}
+                                                            className={`text-zinc-400 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+                                                        />
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {isExpanded && (
+                                                <tr className="border-t border-zinc-100 bg-zinc-50/30">
+                                                    <td colSpan={8} className="p-0">
+                                                        <TicketAccordion
+                                                            reg={reg}
+                                                            onCancel={handleCancel}
+                                                            cancelling={cancelling}
+                                                        />
+                                                    </td>
+                                                </tr>
                                             )}
-                                        </td>
-                                        <td className="px-4 py-3.5 w-56">
-                                            {reg.tickets?.length > 0 ? (
-                                                <div className="flex flex-col gap-2">
-                                                    {reg.tickets.map((t: any) => (
-                                                        <div key={t._id} className="space-y-0.5">
-                                                            <div className="flex items-center gap-0.5">
-                                                                <span title={t.qrCode} className="text-xs font-mono text-zinc-400 truncate max-w-30">
-                                                                    {t.qrCode.slice(0, 8)}…
-                                                                </span>
-                                                                <CopyButton text={t.qrCode} />
-                                                                {t.teamRole && (
-                                                                    <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-zinc-100 text-zinc-400 capitalize shrink-0">{t.teamRole}</span>
-                                                                )}
-                                                            </div>
-                                                            {t.userId ? (
-                                                                <p className="text-[11px] text-zinc-500 leading-tight">
-                                                                    {t.userId.name ?? "—"}
-                                                                    {t.userId.email && <span className="text-zinc-300"> · {t.userId.email}</span>}
-                                                                </p>
-                                                            ) : (
-                                                                <p className="text-[11px] text-zinc-300 italic">No user linked</p>
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <span className="text-xs text-zinc-300">—</span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-3.5 text-zinc-600 max-w-44">
-                                            {reg.eventId?._id ? (
-                                                <a
-                                                    href={`/manage/events/${reg.eventId._id}`}
-                                                    className="hover:text-orange-600 hover:underline line-clamp-2"
-                                                >
-                                                    {reg.eventId.title}
-                                                </a>
-                                            ) : "—"}
-                                        </td>
-                                        <td className="px-4 py-3.5 text-xs text-zinc-500 whitespace-nowrap">
-                                            {reg.isTeamRegistration ? (
-                                                <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">Team</span>
-                                            ) : (
-                                                <span className="bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full font-medium">Individual</span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-3.5">{statusBadge(reg.status)}</td>
-                                        <td className="px-4 py-3.5">{paymentBadge(reg.paymentStatus)}</td>
-                                        <td className="px-4 py-3.5 text-xs text-zinc-500 font-mono">
-                                            {reg.paymentId ?? "—"}
-                                        </td>
-                                        <td className="px-4 py-3.5 text-xs text-zinc-400 whitespace-nowrap">
-                                            {new Date(reg.createdAt).toLocaleDateString("en-IN", {
-                                                day: "numeric", month: "short", year: "numeric",
-                                            })}
-                                            <br />
-                                            <span className="text-zinc-300">
-                                                {new Date(reg.createdAt).toLocaleTimeString("en-IN", {
-                                                    hour: "2-digit", minute: "2-digit",
-                                                })}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3.5">
-                                            {reg.status !== "cancelled" && (
-                                                <button
-                                                    onClick={() => handleCancel(reg._id)}
-                                                    disabled={cancelling === reg._id}
-                                                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 border border-red-200 rounded-md hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                                                >
-                                                    <IconX size={11} />
-                                                    {cancelling === reg._id ? "…" : "Cancel"}
-                                                </button>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
+                                        </Fragment>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
                 )}
 
-                {/* Pagination */}
                 {totalPages > 1 && (
                     <div className="flex items-center justify-between px-5 py-3 border-t border-zinc-100">
                         <p className="text-xs text-zinc-400">

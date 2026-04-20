@@ -21,6 +21,7 @@ interface TicketPreview {
     attendanceStatus: boolean;
     recipientName: string | null;
     recipientEmail: string | null;
+    hasAccount: boolean;
 }
 
 interface RegistrationPreview {
@@ -181,7 +182,14 @@ function RegenerateSection() {
                                             <div>
                                                 <p className="text-sm text-zinc-700">
                                                     {t.recipientName ?? <span className="italic text-zinc-400">No user linked</span>}
-                                                    {t.recipientEmail && <span className="text-zinc-400"> · {t.recipientEmail}</span>}
+                                                    {t.recipientEmail && (
+                                                        <>
+                                                            <span className="text-zinc-400"> · {t.recipientEmail}</span>
+                                                            {!t.hasAccount && (
+                                                                <span className="ml-1.5 text-xs text-amber-500 font-medium">no account</span>
+                                                            )}
+                                                        </>
+                                                    )}
                                                 </p>
                                                 <p className="text-xs text-zinc-400 font-mono">{t.qrCode}</p>
                                             </div>
