@@ -12,11 +12,13 @@ import {
     upgradeExistingUser,
     deleteUser,
     resetUserPassword,
+    changeUserRole,
+    getUsersForExport,
 } from "@/actions/admin";
 import { toast } from "sonner";
 import {
     IconUserPlus, IconX, IconTrash, IconMail, IconClock,
-    IconShield, IconUsers, IconUserCheck, IconLoader2, IconUserMinus, IconKey,
+    IconShield, IconUsers, IconUserCheck, IconLoader2, IconUserMinus, IconKey, IconDownload,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +56,11 @@ export default function ManageUsersPage() {
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [resetModal, setResetModal] = useState<{ userId: string; name: string } | null>(null);
+    const [roleChanging, setRoleChanging] = useState<string | null>(null);
+    const [showExport, setShowExport] = useState(false);
+    const [exportRole, setExportRole] = useState<"all" | "dept_admin" | "coordinator">("all");
+    const [exportDept, setExportDept] = useState("all");
+    const [exportLoading, setExportLoading] = useState(false);
     const [newPassword, setNewPassword] = useState("");
     const [resetLoading, setResetLoading] = useState(false);
 
@@ -67,6 +74,17 @@ export default function ManageUsersPage() {
     const [existingUser, setExistingUser] = useState<ExistingUser | null>(null);
     const [lookupDone, setLookupDone] = useState(false);
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const exportRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        function handleClickOutside(e: MouseEvent) {
+            if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+                setShowExport(false);
+            }
+        }
+        if (showExport) document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, [showExport]);
 
     async function refreshMembers(deptId: string) {
         if (!deptId) return;
@@ -206,6 +224,54 @@ export default function ManageUsersPage() {
         }
     }
 
+    async function handleRoleChange(userId: string, newRole: "coordinator" | "dept_admin") {
+        setRoleChanging(userId);
+        const result = await changeUserRole(userId, selectedDeptId, newRole);
+        setRoleChanging(null);
+        if (result.success) {
+            toast.success(`Role updated to ${newRole === "dept_admin" ? "Admin" : "Coordinator"}.`);
+            setMembers((prev) => prev.map((m: any) => {
+                const uid = typeof m.userId === "object" ? m.userId?._id : m.userId;
+                return uid === userId ? { ...m, role: newRole } : m;
+            }));
+        } else {
+            toast.error(result.error ?? "Failed to change role.");
+        }
+    }
+
+    async function handleExport() {
+        setExportLoading(true);
+        try {
+            const result = await getUsersForExport({
+                roleFilter: exportRole,
+                deptId: exportDept === "all" ? undefined : exportDept,
+            });
+            if (!result.success || !result.data.length) {
+                toast.error("No users found for the selected filters.");
+                return;
+            }
+            const header = "Name,Email,Role,Department";
+            const rows = result.data.map((r) =>
+                [r.name, r.email, r.role, r.department]
+                    .map((v) => `"${(v ?? "").replace(/"/g, '""')}"`)
+                    .join(",")
+            );
+            const csv = [header, ...rows].join("\n");
+            const blob = new Blob([csv], { type: "text/csv" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `users-export-${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            setShowExport(false);
+        } catch {
+            toast.error("Export failed.");
+        } finally {
+            setExportLoading(false);
+        }
+    }
+
     async function handleDeleteUser(userId: string, name: string) {
         if (!confirm(`Permanently delete ${name}? This will remove all their registrations, tickets, and department memberships.`)) return;
         const result = await deleteUser(userId);
@@ -242,13 +308,73 @@ export default function ManageUsersPage() {
                     <h1 className="text-2xl font-bold text-zinc-900">Users</h1>
                     <p className="text-sm text-zinc-500 mt-0.5">Manage department members and invites.</p>
                 </div>
-                <Button
-                    onClick={openModal}
-                    className="bg-primary hover:bg-primary/80 text-primary-foreground text-sm flex items-center gap-2"
-                >
-                    <IconUserPlus size={16} />
-                    Invite Member
-                </Button>
+                <div className="flex items-center gap-2">
+                    <div className="relative" ref={exportRef}>
+                        <Button
+                            variant="outline"
+                            onClick={() => setShowExport((v) => !v)}
+                            className="text-sm flex items-center gap-2"
+                        >
+                            <IconDownload size={15} />
+                            Export
+                        </Button>
+                        {showExport && (
+                            <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-zinc-200 rounded-xl shadow-lg z-20 p-4 space-y-3">
+                                <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Export Users</p>
+                                <div>
+                                    <label className="text-xs text-zinc-500 block mb-1">Role</label>
+                                    <select
+                                        value={exportRole}
+                                        onChange={(e) => setExportRole(e.target.value as typeof exportRole)}
+                                        className="w-full h-8 text-sm border border-zinc-200 rounded-lg px-2.5 bg-white focus:outline-none"
+                                    >
+                                        <option value="all">All Roles</option>
+                                        <option value="dept_admin">Admins only</option>
+                                        <option value="coordinator">Coordinators only</option>
+                                    </select>
+                                </div>
+                                {isSuperAdmin && (
+                                    <div>
+                                        <label className="text-xs text-zinc-500 block mb-1">Department</label>
+                                        <select
+                                            value={exportDept}
+                                            onChange={(e) => setExportDept(e.target.value)}
+                                            className="w-full h-8 text-sm border border-zinc-200 rounded-lg px-2.5 bg-white focus:outline-none"
+                                        >
+                                            <option value="all">All Departments</option>
+                                            {departments.map((d) => (
+                                                <option key={d._id} value={d._id}>{d.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+                                <div className="flex gap-2 pt-1">
+                                    <button
+                                        onClick={() => setShowExport(false)}
+                                        className="flex-1 text-xs py-1.5 rounded-lg border border-zinc-200 text-zinc-500 hover:bg-zinc-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleExport}
+                                        disabled={exportLoading}
+                                        className="flex-1 text-xs py-1.5 rounded-lg bg-zinc-900 text-white hover:bg-zinc-700 disabled:opacity-60 flex items-center justify-center gap-1.5"
+                                    >
+                                        {exportLoading ? <IconLoader2 size={13} className="animate-spin" /> : <IconDownload size={13} />}
+                                        {exportLoading ? "Exporting…" : "Download CSV"}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    <Button
+                        onClick={openModal}
+                        className="bg-primary hover:bg-primary/80 text-primary-foreground text-sm flex items-center gap-2"
+                    >
+                        <IconUserPlus size={16} />
+                        Invite Member
+                    </Button>
+                </div>
             </div>
 
             {departments.length > 1 && (
@@ -313,9 +439,44 @@ export default function ManageUsersPage() {
                                                 <p className="text-sm font-medium text-zinc-900 truncate">{name}</p>
                                                 <p className="text-xs text-zinc-400 truncate">{email}</p>
                                             </div>
-                                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${roleBadgeClass(member.role)}`}>
-                                                {roleLabel(member.role)}
-                                            </span>
+                                            {isSuperAdmin && member.role !== "super_admin" ? (
+                                                <div className="flex items-center gap-1">
+                                                    {roleChanging === userId ? (
+                                                        <IconLoader2 size={14} className="animate-spin text-zinc-400" />
+                                                    ) : (
+                                                        <>
+                                                            <button
+                                                                onClick={() => handleRoleChange(userId, "dept_admin")}
+                                                                disabled={member.role === "dept_admin"}
+                                                                title="Upgrade to Admin"
+                                                                className={`text-xs px-2 py-0.5 rounded-full font-medium transition-colors border ${
+                                                                    member.role === "dept_admin"
+                                                                        ? "bg-zinc-900 text-white border-zinc-900 cursor-default"
+                                                                        : "bg-white text-zinc-500 border-zinc-200 hover:bg-zinc-900 hover:text-white hover:border-zinc-900"
+                                                                }`}
+                                                            >
+                                                                Admin
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleRoleChange(userId, "coordinator")}
+                                                                disabled={member.role === "coordinator"}
+                                                                title="Downgrade to Coordinator"
+                                                                className={`text-xs px-2 py-0.5 rounded-full font-medium transition-colors border ${
+                                                                    member.role === "coordinator"
+                                                                        ? "bg-zinc-100 text-zinc-600 border-zinc-200 cursor-default"
+                                                                        : "bg-white text-zinc-400 border-zinc-200 hover:bg-zinc-100 hover:text-zinc-600"
+                                                                }`}
+                                                            >
+                                                                Coordinator
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${roleBadgeClass(member.role)}`}>
+                                                    {roleLabel(member.role)}
+                                                </span>
+                                            )}
                                             {isSuperAdmin && (
                                                 <div className="flex items-center gap-1">
                                                     <button

@@ -332,6 +332,70 @@ export async function removeDepartmentMember(departmentId: string, userId: strin
     return { success: true };
 }
 
+export async function changeUserRole(
+    userId: string,
+    departmentId: string,
+    newRole: "coordinator" | "dept_admin"
+) {
+    await requireSuperAdmin();
+    await connectDB();
+
+    const user = await User.findById(userId);
+    if (!user) return { success: false, error: "User not found." };
+    if (user.role === "super_admin") return { success: false, error: "Cannot change a super admin's role." };
+
+    await User.findByIdAndUpdate(userId, { role: newRole });
+
+    await Department.findOneAndUpdate(
+        { _id: departmentId, "members.userId": userId },
+        { $set: { "members.$.role": newRole } }
+    );
+
+    return { success: true };
+}
+
+export async function getUsersForExport(options: {
+    roleFilter?: "all" | "dept_admin" | "coordinator";
+    deptId?: string;
+} = {}) {
+    const session = await requireManagement();
+    await connectDB();
+
+    const deptQuery: Record<string, any> = {};
+    if (session.user.role !== "super_admin") {
+        deptQuery._id = { $in: session.user.departments };
+    } else if (options.deptId) {
+        deptQuery._id = options.deptId;
+    }
+
+    const departments = await Department.find(deptQuery)
+        .populate("members.userId", "name email role")
+        .sort({ name: 1 })
+        .lean();
+
+    const rows: { name: string; email: string; role: string; department: string }[] = [];
+    const seen = new Set<string>();
+
+    for (const dept of departments) {
+        for (const member of (dept as any).members ?? []) {
+            const u = member.userId as any;
+            if (!u?.email) continue;
+            if (options.roleFilter && options.roleFilter !== "all" && member.role !== options.roleFilter) continue;
+            const key = `${u._id}-${dept._id}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            rows.push({
+                name: u.name ?? "",
+                email: u.email,
+                role: member.role,
+                department: (dept as any).name,
+            });
+        }
+    }
+
+    return { success: true, data: rows };
+}
+
 export async function getAnalytics() {
     await requireSuperAdmin();
     await connectDB();
