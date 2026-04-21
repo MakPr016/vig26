@@ -3,9 +3,9 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { getCategories, createCategory, deleteCategory, renameCategory } from "@/actions/events";
+import { getCategories, createCategory, deleteCategory, renameCategory, getEventsWithoutSheets } from "@/actions/events";
 import { toast } from "sonner";
-import { IconPlus, IconTrash, IconTag, IconLock, IconPencil, IconCheck, IconX, IconTableFilled, IconExternalLink } from "@tabler/icons-react";
+import { IconPlus, IconTrash, IconTag, IconLock, IconPencil, IconCheck, IconX, IconTableFilled, IconExternalLink, IconRefresh, IconAlertTriangle } from "@tabler/icons-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -24,11 +24,18 @@ export default function ManageCategoriesPage() {
     const [sheetsConnected, setSheetsConnected] = useState<boolean | null>(null);
     const [bulkCreating, setBulkCreating] = useState(false);
     const [bulkResult, setBulkResult] = useState<{ created: number; total: number; errors?: string[] } | null>(null);
+    const [bulkSyncing, setBulkSyncing] = useState(false);
+    const [syncResult, setSyncResult] = useState<{ synced: number; total: number; errors?: string[] } | null>(null);
+    const [eventsWithoutSheets, setEventsWithoutSheets] = useState<any[]>([]);
 
     async function load() {
         setLoading(true);
-        const cats = await getCategories();
+        const [cats, missing] = await Promise.all([
+            getCategories(),
+            getEventsWithoutSheets(),
+        ]);
         setCategories(cats as any[]);
+        setEventsWithoutSheets(missing as any[]);
         setLoading(false);
     }
 
@@ -62,6 +69,29 @@ export default function ManageCategoriesPage() {
             toast.error("Network error. Please try again.");
         } finally {
             setBulkCreating(false);
+        }
+    }
+
+    async function handleBulkSyncSheets() {
+        setSyncResult(null);
+        setBulkSyncing(true);
+        try {
+            const res = await fetch("/api/events/bulk-sync", { method: "POST" });
+            const json = await res.json();
+            if (!res.ok || !json.success) {
+                toast.error(json.error ?? "Failed to sync sheets.");
+            } else {
+                setSyncResult({ synced: json.synced, total: json.total, errors: json.errors });
+                if (json.synced > 0) {
+                    toast.success(`Synced ${json.synced} of ${json.total} event sheets.`);
+                } else {
+                    toast.info(json.message ?? "No sheets to sync.");
+                }
+            }
+        } catch {
+            toast.error("Network error. Please try again.");
+        } finally {
+            setBulkSyncing(false);
         }
     }
 
@@ -219,7 +249,7 @@ export default function ManageCategoriesPage() {
             {/* Bulk Google Sheets */}
             <div className="bg-white rounded-xl border border-zinc-200 p-5">
                 <div className="flex items-start justify-between gap-4">
-                    <div>
+                    <div className="flex-1 min-w-0">
                         <h2 className="text-sm font-semibold text-zinc-900 flex items-center gap-2">
                             <IconTableFilled size={15} className="text-green-600" />
                             Google Sheets
@@ -241,8 +271,21 @@ export default function ManageCategoriesPage() {
                                 )}
                             </div>
                         )}
+                        {syncResult && (
+                            <div className="mt-2 text-xs text-zinc-600">
+                                {syncResult.synced > 0
+                                    ? <span className="text-blue-700 font-medium">✓ Synced {syncResult.synced} of {syncResult.total} event sheets.</span>
+                                    : <span>No event sheets to sync.</span>
+                                }
+                                {syncResult.errors && syncResult.errors.length > 0 && (
+                                    <ul className="mt-1 text-red-500 space-y-0.5">
+                                        {syncResult.errors.map((e, i) => <li key={i}>• {e}</li>)}
+                                    </ul>
+                                )}
+                            </div>
+                        )}
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex flex-col items-end gap-2 shrink-0">
                         {sheetsConnected === false && (
                             <a
                                 href="/api/auth/google-sheets/connect"
@@ -251,18 +294,58 @@ export default function ManageCategoriesPage() {
                                 Connect Google <IconExternalLink size={11} />
                             </a>
                         )}
-                        <Button
-                            onClick={handleBulkCreateSheets}
-                            disabled={bulkCreating || sheetsConnected === false}
-                            className="bg-green-700 hover:bg-green-800 text-white text-xs h-8 px-3"
-                            title={sheetsConnected === false ? "Connect your Google account first" : undefined}
-                        >
-                            <IconTableFilled size={14} className="mr-1.5" />
-                            {bulkCreating ? "Creating…" : "Create All Sheets"}
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                onClick={handleBulkCreateSheets}
+                                disabled={bulkCreating || bulkSyncing || sheetsConnected === false}
+                                className="bg-green-700 hover:bg-green-800 text-white text-xs h-8 px-3"
+                                title={sheetsConnected === false ? "Connect your Google account first" : undefined}
+                            >
+                                <IconTableFilled size={14} className="mr-1.5" />
+                                {bulkCreating ? "Creating…" : "Create All Sheets"}
+                            </Button>
+                            <Button
+                                onClick={handleBulkSyncSheets}
+                                disabled={bulkSyncing || bulkCreating || sheetsConnected === false}
+                                className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-8 px-3"
+                                title={sheetsConnected === false ? "Connect your Google account first" : "Re-sync all registrations to existing sheets"}
+                            >
+                                <IconRefresh size={14} className={`mr-1.5 ${bulkSyncing ? "animate-spin" : ""}`} />
+                                {bulkSyncing ? "Syncing…" : "Sync All Sheets"}
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            {/* Events without sheets */}
+            {eventsWithoutSheets.length > 0 && (
+                <div className="bg-amber-50 rounded-xl border border-amber-200 p-5">
+                    <div className="flex items-start gap-3">
+                        <IconAlertTriangle size={16} className="text-amber-500 mt-0.5 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                            <h2 className="text-sm font-semibold text-amber-900">
+                                {eventsWithoutSheets.length} published event{eventsWithoutSheets.length !== 1 ? "s" : ""} without a sheet
+                            </h2>
+                            <p className="text-xs text-amber-700 mt-0.5 mb-3">
+                                These events are published but don&apos;t have a Google Sheet tab linked. Use &quot;Create All Sheets&quot; to generate them.
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                                {eventsWithoutSheets.map((ev) => (
+                                    <span
+                                        key={ev._id}
+                                        className="inline-flex items-center gap-1 bg-amber-100 border border-amber-200 text-amber-800 text-xs px-2 py-1 rounded-lg"
+                                    >
+                                        <span className="capitalize text-amber-500 font-medium">{ev.category}</span>
+                                        <span className="text-amber-300">·</span>
+                                        {ev.title}{ev.type ? <span className="text-amber-600 ml-0.5">({ev.type})</span> : null}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Add Category */}
             <div className="bg-white rounded-xl border border-zinc-200 p-5">

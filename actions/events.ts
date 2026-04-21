@@ -692,6 +692,18 @@ export async function getCategories() {
     return serialize(categories);
 }
 
+export async function getEventsWithoutSheets() {
+    await connectDB();
+    const events = await Event.find({
+        status: "published",
+        $or: [{ googleSheetId: null }, { googleSheetId: { $exists: false } }, { sheetTabName: null }, { sheetTabName: { $exists: false } }],
+    })
+        .select("title category type")
+        .sort({ category: 1, title: 1 })
+        .lean();
+    return serialize(events);
+}
+
 export async function createCategory(name: string) {
     await requireSuperAdmin();
     await connectDB();
