@@ -435,7 +435,24 @@ export async function getEventRegistrations(eventId: string) {
         .sort({ createdAt: -1 })
         .lean();
 
-    return { success: true, data: serialize(registrations) };
+    const regIds = registrations.map((r: any) => r._id);
+    const tickets = await Ticket.find({ registrationId: { $in: regIds } })
+        .select("registrationId attendanceStatus checkedInAt qrCode teamRole userId")
+        .lean();
+
+    const ticketsByReg: Record<string, any[]> = {};
+    for (const t of tickets as any[]) {
+        const rid = t.registrationId.toString();
+        if (!ticketsByReg[rid]) ticketsByReg[rid] = [];
+        ticketsByReg[rid].push(t);
+    }
+
+    const regsWithTickets = (registrations as any[]).map((r) => ({
+        ...r,
+        tickets: ticketsByReg[r._id.toString()] ?? [],
+    }));
+
+    return { success: true, data: serialize(regsWithTickets) };
 }
 
 export async function toggleAttendance(ticketId: string) {

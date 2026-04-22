@@ -15,6 +15,7 @@ import {
     IconLoader2, IconTableExport, IconCopy,
     IconBrandGoogle, IconExternalLink, IconUnlink, IconRefresh,
     IconLock, IconLockOpen, IconPlayerPlay, IconBan, IconActivity,
+    IconCheck,
 } from "@tabler/icons-react";
 import type { IEvent, IRegistration } from "@/types";
 import "@uiw/react-markdown-preview/markdown.css";
@@ -125,6 +126,8 @@ export default function ManageEventDetailPage() {
     const [loading, setLoading] = useState(true);
     const [togglingId, setTogglingId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<"overview" | "registrations" | "activity">("overview");
+    const [regStatusFilter, setRegStatusFilter] = useState<"all" | "confirmed" | "pending" | "cancelled">("all");
+    const [checkinFilter, setCheckinFilter] = useState<"all" | "checked_in" | "not_checked_in">("all");
     const [auditLogs, setAuditLogs] = useState<any[]>([]);
     const [loadingLogs, setLoadingLogs] = useState(false);
     const [generatingToken, setGeneratingToken] = useState(false);
@@ -320,6 +323,23 @@ export default function ManageEventDetailPage() {
     const totalParticipants = (registrations as any[]).reduce((sum, r) => {
         return sum + 1 + (r.teamMembers?.length ?? 0);
     }, 0);
+
+    const checkedInCount = (registrations as any[]).reduce((sum, r) => {
+        const tickets: any[] = r.tickets ?? [];
+        return sum + tickets.filter((t: any) => t.attendanceStatus).length;
+    }, 0);
+    const totalTickets = (registrations as any[]).reduce((sum, r) => sum + (r.tickets?.length ?? 0), 0);
+
+    const filteredRegistrations = (registrations as any[]).filter((r) => {
+        if (regStatusFilter !== "all" && r.status !== regStatusFilter) return false;
+        if (checkinFilter !== "all") {
+            const tickets: any[] = r.tickets ?? [];
+            const checkedCount = tickets.filter((t: any) => t.attendanceStatus).length;
+            if (checkinFilter === "checked_in" && checkedCount !== tickets.length) return false;
+            if (checkinFilter === "not_checked_in" && checkedCount !== 0) return false;
+        }
+        return true;
+    });
 
     return (
         <div className="space-y-5 max-w-4xl mx-auto">
@@ -670,6 +690,9 @@ export default function ManageEventDetailPage() {
                                 {hasTeams && totalParticipants !== registrations.length && (
                                     <> · {totalParticipants} total participants</>
                                 )}
+                                {totalTickets > 0 && (
+                                    <> · <span className="text-green-600 font-medium">{checkedInCount}/{totalTickets} checked in</span></>
+                                )}
                             </span>
                         </div>
 
@@ -686,9 +709,65 @@ export default function ManageEventDetailPage() {
                         )}
                     </div>
 
-                    {registrations.length === 0 ? (
+                    {/* Filters */}
+                    {registrations.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-3 px-5 py-3 border-b border-zinc-100 bg-zinc-50/40">
+                            <div className="flex gap-1 bg-zinc-100 p-1 rounded-lg">
+                                {(["all", "confirmed", "pending", "cancelled"] as const).map((s) => (
+                                    <button
+                                        key={s}
+                                        onClick={() => setRegStatusFilter(s)}
+                                        className={`px-2.5 py-1 text-xs font-medium rounded-md capitalize transition-all ${
+                                            regStatusFilter === s
+                                                ? "bg-white text-zinc-900 shadow-sm"
+                                                : "text-zinc-500 hover:text-zinc-700"
+                                        }`}
+                                    >
+                                        {s}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div className="flex gap-1 bg-zinc-100 p-1 rounded-lg">
+                                {([
+                                    { value: "all", label: "All Check-ins" },
+                                    { value: "checked_in", label: "Checked In" },
+                                    { value: "not_checked_in", label: "Not Checked In" },
+                                ] as const).map((opt) => (
+                                    <button
+                                        key={opt.value}
+                                        onClick={() => setCheckinFilter(opt.value)}
+                                        className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                                            checkinFilter === opt.value
+                                                ? "bg-white text-zinc-900 shadow-sm"
+                                                : "text-zinc-500 hover:text-zinc-700"
+                                        }`}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {(regStatusFilter !== "all" || checkinFilter !== "all") && (
+                                <button
+                                    onClick={() => { setRegStatusFilter("all"); setCheckinFilter("all"); }}
+                                    className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors"
+                                >
+                                    Clear filters
+                                </button>
+                            )}
+
+                            <span className="ml-auto text-xs text-zinc-400">
+                                {filteredRegistrations.length} of {registrations.length} shown
+                            </span>
+                        </div>
+                    )}
+
+                    {filteredRegistrations.length === 0 ? (
                         <div className="px-5 py-14 text-center">
-                            <p className="text-sm text-zinc-400">No registrations yet.</p>
+                            <p className="text-sm text-zinc-400">
+                                {registrations.length === 0 ? "No registrations yet." : "No registrations match the current filters."}
+                            </p>
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
@@ -701,58 +780,79 @@ export default function ManageEventDetailPage() {
                                             <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Team</th>
                                         )}
                                         <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Status</th>
+                                        <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Check-in</th>
                                         <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Payment</th>
                                         <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Registered At</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-zinc-100">
-                                    {(registrations as any[]).map((reg) => (
-                                        <tr key={reg._id} className="hover:bg-zinc-50 transition-colors">
-                                            <td className="px-5 py-3.5">
-                                                <p className="font-medium text-zinc-900">
-                                                    {reg.userId?.name ?? (typeof reg.userId === "string" ? `User ${reg.userId.slice(-6)}` : "—")}
-                                                </p>
-                                                <p className="text-xs text-zinc-400">{reg.userId?.email ?? "—"}</p>
-                                                {reg.isTeamRegistration && reg.teamMembers?.length > 0 && (
-                                                    <p className="text-xs text-zinc-400 mt-0.5">
-                                                        +{reg.teamMembers.length} teammate{reg.teamMembers.length !== 1 ? "s" : ""}
+                                    {filteredRegistrations.map((reg) => {
+                                        const tickets: any[] = reg.tickets ?? [];
+                                        const checkedTickets = tickets.filter((t: any) => t.attendanceStatus).length;
+                                        return (
+                                            <tr key={reg._id} className="hover:bg-zinc-50 transition-colors">
+                                                <td className="px-5 py-3.5">
+                                                    <p className="font-medium text-zinc-900">
+                                                        {reg.userId?.name ?? (typeof reg.userId === "string" ? `User ${reg.userId.slice(-6)}` : "—")}
                                                     </p>
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-3.5 text-zinc-600 text-sm">{reg.userId?.collegeId ?? "—"}</td>
-                                            {hasTeams && (
-                                                <td className="px-4 py-3.5">
-                                                    {reg.isTeamRegistration ? (
-                                                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
-                                                            Leader
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-xs text-zinc-400">Solo</span>
+                                                    <p className="text-xs text-zinc-400">{reg.userId?.email ?? "—"}</p>
+                                                    {reg.isTeamRegistration && reg.teamMembers?.length > 0 && (
+                                                        <p className="text-xs text-zinc-400 mt-0.5">
+                                                            +{reg.teamMembers.length} teammate{reg.teamMembers.length !== 1 ? "s" : ""}
+                                                        </p>
                                                     )}
                                                 </td>
-                                            )}
-                                            <td className="px-4 py-3.5">
-                                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                                                    reg.status === "confirmed" ? "bg-green-50 text-green-700"
-                                                        : reg.status === "pending" ? "bg-yellow-50 text-yellow-700"
-                                                            : "bg-red-50 text-red-600"
-                                                }`}>{reg.status}</span>
-                                            </td>
-                                            <td className="px-4 py-3.5">
-                                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                                                    reg.paymentStatus === "completed" ? "bg-green-50 text-green-700"
-                                                        : reg.paymentStatus === "na" ? "bg-zinc-100 text-zinc-500"
-                                                            : reg.paymentStatus === "pending" ? "bg-yellow-50 text-yellow-700"
+                                                <td className="px-4 py-3.5 text-zinc-600 text-sm">{reg.userId?.collegeId ?? "—"}</td>
+                                                {hasTeams && (
+                                                    <td className="px-4 py-3.5">
+                                                        {reg.isTeamRegistration ? (
+                                                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
+                                                                Leader
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-xs text-zinc-400">Solo</span>
+                                                        )}
+                                                    </td>
+                                                )}
+                                                <td className="px-4 py-3.5">
+                                                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                                        reg.status === "confirmed" ? "bg-green-50 text-green-700"
+                                                            : reg.status === "pending" ? "bg-yellow-50 text-yellow-700"
                                                                 : "bg-red-50 text-red-600"
-                                                }`}>{reg.paymentStatus}</span>
-                                            </td>
-                                            <td className="px-4 py-3.5 text-xs text-zinc-400">
-                                                {new Date(reg.createdAt).toLocaleDateString("en-IN", {
-                                                    day: "numeric", month: "short", year: "numeric",
-                                                })}
-                                            </td>
-                                        </tr>
-                                    ))}
+                                                    }`}>{reg.status}</span>
+                                                </td>
+                                                <td className="px-4 py-3.5">
+                                                    {tickets.length === 0 ? (
+                                                        <span className="text-xs text-zinc-300">—</span>
+                                                    ) : checkedTickets === 0 ? (
+                                                        <span className="text-xs text-zinc-400">0/{tickets.length}</span>
+                                                    ) : checkedTickets === tickets.length ? (
+                                                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700">
+                                                            <IconCheck size={10} />
+                                                            {checkedTickets}/{tickets.length}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">
+                                                            {checkedTickets}/{tickets.length}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-3.5">
+                                                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                                        reg.paymentStatus === "completed" ? "bg-green-50 text-green-700"
+                                                            : reg.paymentStatus === "na" ? "bg-zinc-100 text-zinc-500"
+                                                                : reg.paymentStatus === "pending" ? "bg-yellow-50 text-yellow-700"
+                                                                    : "bg-red-50 text-red-600"
+                                                    }`}>{reg.paymentStatus}</span>
+                                                </td>
+                                                <td className="px-4 py-3.5 text-xs text-zinc-400">
+                                                    {new Date(reg.createdAt).toLocaleDateString("en-IN", {
+                                                        day: "numeric", month: "short", year: "numeric",
+                                                    })}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
