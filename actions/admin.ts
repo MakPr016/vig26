@@ -505,7 +505,7 @@ export async function getAllRegistrationsAdmin(options: {
 
     const regIds = registrations.map((r: any) => r._id);
     const tickets = await Ticket.find({ registrationId: { $in: regIds } })
-        .select("registrationId qrCode userId teamRole")
+        .select("registrationId qrCode userId teamRole attendanceStatus checkedInAt")
         .populate("userId", "name email collegeId")
         .lean();
 
@@ -541,4 +541,26 @@ export async function cancelRegistrationAdmin(registrationId: string) {
     await Registration.findByIdAndUpdate(registrationId, { status: "cancelled" });
 
     return { success: true };
+}
+
+export async function checkInTicketAdmin(ticketId: string) {
+    await requireManagement();
+    await connectDB();
+
+    const ticket = await Ticket.findById(ticketId).populate("eventId", "department");
+    if (!ticket) return { success: false, error: "Ticket not found." };
+
+    await requireDepartmentAccess((ticket.eventId as any).department.toString());
+
+    const nowCheckedIn = !ticket.attendanceStatus;
+    const updated = await Ticket.findByIdAndUpdate(
+        ticketId,
+        {
+            attendanceStatus: nowCheckedIn,
+            checkedInAt: nowCheckedIn ? new Date() : null,
+        },
+        { returnDocument: "after" }
+    ).lean();
+
+    return { success: true, data: serialize(updated) };
 }

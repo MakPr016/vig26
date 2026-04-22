@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, Fragment } from "react";
-import { getAllRegistrationsAdmin, cancelRegistrationAdmin } from "@/actions/admin";
+import { getAllRegistrationsAdmin, cancelRegistrationAdmin, checkInTicketAdmin } from "@/actions/admin";
 import {
     IconSearch,
     IconDownload,
@@ -73,24 +73,29 @@ function downloadCSV(rows: any[]) {
     const headers = [
         "Registration ID", "Ticket ID(s)", "Name", "Email", "College ID",
         "Event", "Type", "Team ID",
-        "Status", "Payment Status", "Transaction ID", "Registered At",
+        "Status", "Check-in", "Payment Status", "Transaction ID", "Registered At",
     ];
     const lines = [
         headers.map((h) => `"${h}"`).join(","),
-        ...rows.map((r) => [
-            r._id,
-            (r.tickets ?? []).map((t: any) => t.qrCode).join("; "),
-            r.userId?.name ?? "",
-            r.userId?.email ?? "",
-            r.userId?.collegeId ?? "",
-            r.eventId?.title ?? "",
-            r.isTeamRegistration ? "Team" : "Individual",
-            r.teamId ?? "",
-            r.status,
-            r.paymentStatus,
-            r.paymentId ?? "",
-            new Date(r.createdAt).toLocaleString("en-IN"),
-        ].map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")),
+        ...rows.map((r) => {
+            const tickets: any[] = r.tickets ?? [];
+            const checkedIn = tickets.filter((t: any) => t.attendanceStatus).length;
+            return [
+                r._id,
+                tickets.map((t: any) => t.qrCode).join("; "),
+                r.userId?.name ?? "",
+                r.userId?.email ?? "",
+                r.userId?.collegeId ?? "",
+                r.eventId?.title ?? "",
+                r.isTeamRegistration ? "Team" : "Individual",
+                r.teamId ?? "",
+                r.status,
+                tickets.length > 0 ? `${checkedIn}/${tickets.length}` : "",
+                r.paymentStatus,
+                r.paymentId ?? "",
+                new Date(r.createdAt).toLocaleString("en-IN"),
+            ].map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",");
+        }),
     ];
     const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -101,10 +106,12 @@ function downloadCSV(rows: any[]) {
     URL.revokeObjectURL(url);
 }
 
-function TicketAccordion({ reg, onCancel, cancelling }: {
+function TicketAccordion({ reg, onCancel, cancelling, onCheckIn, checkingIn }: {
     reg: any;
     onCancel: (id: string) => void;
     cancelling: string | null;
+    onCheckIn: (ticketId: string, regId: string) => void;
+    checkingIn: string | null;
 }) {
     const tickets: any[] = (reg.tickets ?? [])
         .slice()
@@ -133,19 +140,24 @@ function TicketAccordion({ reg, onCancel, cancelling }: {
                     }
 
                     return (
-                        <div key={t._id} className="px-4 py-3 flex items-center gap-3 text-sm bg-white hover:bg-zinc-50/50 transition-colors">
-                            <span className="text-[11px] px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-500 capitalize shrink-0">
+                        <div key={t._id} className="px-4 py-3 flex items-start gap-3 text-sm bg-white hover:bg-zinc-50/50 transition-colors">
+                            <span className="text-[11px] px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-500 capitalize shrink-0 mt-0.5">
                                 {t.teamRole}
                             </span>
-                            <div className="flex items-center gap-0.5 shrink-0">
-                                <span title={t.qrCode} className="text-xs font-mono text-zinc-400">
-                                    {t.qrCode?.slice(0, 10)}…
-                                </span>
-                                <CopyButton text={t.qrCode} />
-                            </div>
                             <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1 flex-wrap">
+                                    <span className="text-xs font-mono text-zinc-400 break-all">{t.qrCode}</span>
+                                    <CopyButton text={t.qrCode} />
+                                    {t.attendanceStatus ? (
+                                        <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-green-50 text-green-700 shrink-0">
+                                            ✓ checked in{t.checkedInAt ? ` · ${new Date(t.checkedInAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}` : ""}
+                                        </span>
+                                    ) : (
+                                        <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-400 shrink-0">not checked in</span>
+                                    )}
+                                </div>
                                 {displayName ? (
-                                    <p className="text-zinc-700 truncate">{displayName}</p>
+                                    <p className="text-zinc-700 mt-0.5">{displayName}</p>
                                 ) : null}
                                 {displayEmail ? (
                                     <p className={`text-xs truncate ${hasAccount ? "text-zinc-400" : "text-amber-500"}`}>
@@ -158,11 +170,24 @@ function TicketAccordion({ reg, onCancel, cancelling }: {
                                     <p className="text-xs text-zinc-300 italic">No user linked</p>
                                 )}
                             </div>
-                            {t.attendanceStatus && (
-                                <span className="text-xs px-1.5 py-0.5 rounded bg-green-50 text-green-600 shrink-0">
-                                    checked in
-                                </span>
-                            )}
+                            <button
+                                onClick={() => onCheckIn(t._id, reg._id)}
+                                disabled={checkingIn === t._id}
+                                className={`shrink-0 flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                                    t.attendanceStatus
+                                        ? "border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:text-red-500 hover:border-red-200"
+                                        : "border-green-200 text-green-700 bg-green-50 hover:bg-green-100"
+                                }`}
+                            >
+                                {checkingIn === t._id ? (
+                                    <IconLoader2 size={11} className="animate-spin" />
+                                ) : t.attendanceStatus ? (
+                                    <IconX size={11} />
+                                ) : (
+                                    <IconCheck size={11} />
+                                )}
+                                {checkingIn === t._id ? "…" : t.attendanceStatus ? "Undo" : "Check In"}
+                            </button>
                         </div>
                     );
                 })}
@@ -197,6 +222,7 @@ export default function RegistrationsPage() {
     const [totalPages, setTotalPages] = useState(1);
     const [loading, setLoading] = useState(true);
     const [cancelling, setCancelling] = useState<string | null>(null);
+    const [checkingIn, setCheckingIn] = useState<string | null>(null);
 
     const fetchData = useCallback(async () => {
         setLoading(true);
@@ -243,6 +269,28 @@ export default function RegistrationsPage() {
             }
         } finally {
             setCancelling(null);
+        }
+    }
+
+    async function handleCheckIn(ticketId: string, regId: string) {
+        setCheckingIn(ticketId);
+        try {
+            const result = await checkInTicketAdmin(ticketId);
+            if (result.success) {
+                const updated = result.data as any;
+                setData((prev) => prev.map((r) => r._id === regId ? {
+                    ...r,
+                    tickets: r.tickets.map((t: any) => t._id === ticketId ? {
+                        ...t,
+                        attendanceStatus: updated.attendanceStatus,
+                        checkedInAt: updated.checkedInAt,
+                    } : t),
+                } : r));
+            } else {
+                alert((result as any).error ?? "Failed to update check-in.");
+            }
+        } finally {
+            setCheckingIn(null);
         }
     }
 
@@ -348,6 +396,7 @@ export default function RegistrationsPage() {
                                     <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Event</th>
                                     <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Type</th>
                                     <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Status</th>
+                                    <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Check-in</th>
                                     <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Payment</th>
                                     <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Transaction ID</th>
                                     <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Registered</th>
@@ -390,6 +439,17 @@ export default function RegistrationsPage() {
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-3.5">{statusBadge(reg.status)}</td>
+                                                <td className="px-4 py-3.5">
+                                                    {(() => {
+                                                        const tickets: any[] = reg.tickets ?? [];
+                                                        const total = tickets.length;
+                                                        if (total === 0) return <span className="text-xs text-zinc-300">—</span>;
+                                                        const checked = tickets.filter((t: any) => t.attendanceStatus).length;
+                                                        if (checked === 0) return <span className="text-xs text-zinc-400">0/{total}</span>;
+                                                        if (checked === total) return <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700">{checked}/{total}</span>;
+                                                        return <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">{checked}/{total}</span>;
+                                                    })()}
+                                                </td>
                                                 <td className="px-4 py-3.5">{paymentBadge(reg.paymentStatus)}</td>
                                                 <td className="px-4 py-3.5 text-xs text-zinc-500 font-mono">
                                                     {reg.paymentId ?? "—"}
@@ -421,11 +481,13 @@ export default function RegistrationsPage() {
                                             </tr>
                                             {isExpanded && (
                                                 <tr className="border-t border-zinc-100 bg-zinc-50/30">
-                                                    <td colSpan={8} className="p-0">
+                                                    <td colSpan={9} className="p-0">
                                                         <TicketAccordion
                                                             reg={reg}
                                                             onCancel={handleCancel}
                                                             cancelling={cancelling}
+                                                            onCheckIn={handleCheckIn}
+                                                            checkingIn={checkingIn}
                                                         />
                                                     </td>
                                                 </tr>
