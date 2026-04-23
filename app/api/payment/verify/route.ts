@@ -208,6 +208,7 @@ export async function POST(req: Request) {
                             teamMembers: isTeam ? parsed.data.teamMembers : [],
                             teamId,
                             paymentId: orderId,
+                            amountPaid: paidAmountFromProvider,
                             paymentStatus: "completed",
                             status: "confirmed",
                         },

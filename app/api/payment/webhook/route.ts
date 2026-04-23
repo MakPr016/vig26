@@ -183,7 +183,7 @@ async function confirmPayment(orderId: string, paidAmount: number, provider: str
         // Atomic update — guards against concurrent webhook retries
         const updated = await Registration.findOneAndUpdate(
             { paymentId: orderId, paymentStatus: { $ne: "completed" } },
-            { paymentStatus: "completed", status: "confirmed" },
+            { paymentStatus: "completed", status: "confirmed", amountPaid: paidAmount },
             { new: true }
         );
         if (!updated) {

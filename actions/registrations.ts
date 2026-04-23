@@ -314,19 +314,38 @@ export async function getEventRevenue(eventId: string) {
         return { success: true, data: { totalRevenue: 0, paidCount: 0, pendingCount: 0, expectedFromPending: 0, isFree: true } };
     }
 
-    const revenueExpr = pricePerPerson
+    // Fallback expression for registrations that predate the amountPaid field
+    const fallbackExpr = pricePerPerson
         ? { $multiply: [price, { $add: [{ $size: { $ifNull: ["$teamMembers", []] } }, 1] }] }
-        : price;
+        : { $literal: price };
+
+    // Use actual amountPaid when available; fall back to event price for historical records
+    const revenueExpr = {
+        $cond: {
+            if: { $gt: [{ $ifNull: ["$amountPaid", 0] }, 0] },
+            then: "$amountPaid",
+            else: fallbackExpr,
+        },
+    };
 
     const [collected, pending] = await Promise.all([
         Registration.aggregate([
-            { $match: { eventId: oid, status: "confirmed", paymentStatus: "completed" } },
+            {
+                $match: {
+                    eventId: oid,
+                    status: "confirmed",
+                    $or: [
+                        { paymentStatus: "completed" },
+                        { paymentId: /^manual_/ },
+                    ],
+                },
+            },
             { $project: { revenue: revenueExpr } },
             { $group: { _id: null, total: { $sum: "$revenue" }, count: { $sum: 1 } } },
         ]),
         Registration.aggregate([
             { $match: { eventId: oid, paymentStatus: "pending" } },
-            { $project: { expected: revenueExpr } },
+            { $project: { expected: fallbackExpr } },
             { $group: { _id: null, total: { $sum: "$expected" }, count: { $sum: 1 } } },
         ]),
     ]);

@@ -50,6 +50,10 @@ const RegistrationSchema = new Schema<IRegistrationDocument>(
             type: String,
             default: null,
         },
+        amountPaid: {
+            type: Number,
+            default: 0,
+        },
         addMemberOrderIds: {
             type: [String],
             default: [],
