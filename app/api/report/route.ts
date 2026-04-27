@@ -9,7 +9,8 @@ import path from "path";
 
 function isAtria(usn: string | null | undefined): boolean {
     if (!usn) return false;
-    return usn.trim().toUpperCase().startsWith("1AT");
+    const u = usn.trim().toUpperCase();
+    return u.startsWith("1AT") || u.startsWith("1TT");
 }
 
 function extractCollegeCode(usn: string | null | undefined): string | null {
@@ -52,39 +53,6 @@ const COLLEGE_MAP: Record<string, string> = {
     CK: "CHRIST (Deemed to be University)",
 };
 
-  const COLLEGE_LOCATION_MAP: Record<string, { city: string; state: string }> = {
-    AT: { city: "Bengaluru", state: "Karnataka" },
-    MS: { city: "Bengaluru", state: "Karnataka" },
-    RV: { city: "Bengaluru", state: "Karnataka" },
-    BM: { city: "Bengaluru", state: "Karnataka" },
-    DS: { city: "Bengaluru", state: "Karnataka" },
-    PE: { city: "Bengaluru", state: "Karnataka" },
-    BN: { city: "Bengaluru", state: "Karnataka" },
-    NM: { city: "Bengaluru", state: "Karnataka" },
-    JS: { city: "Bengaluru", state: "Karnataka" },
-    SJ: { city: "Bengaluru", state: "Karnataka" },
-    CM: { city: "Bengaluru", state: "Karnataka" },
-    GL: { city: "Bengaluru", state: "Karnataka" },
-    JY: { city: "Bengaluru", state: "Karnataka" },
-    AC: { city: "Bengaluru", state: "Karnataka" },
-    SB: { city: "Bengaluru", state: "Karnataka" },
-    VE: { city: "Bengaluru", state: "Karnataka" },
-    NA: { city: "Bengaluru", state: "Karnataka" },
-    BA: { city: "Bengaluru", state: "Karnataka" },
-    ST: { city: "Bengaluru", state: "Karnataka" },
-    AM: { city: "Bengaluru", state: "Karnataka" },
-    HK: { city: "Karkala", state: "Karnataka" },
-    SV: { city: "Bengaluru", state: "Karnataka" },
-    AJ: { city: "Mangaluru", state: "Karnataka" },
-    CB: { city: "Mangaluru", state: "Karnataka" },
-    BE: { city: "Mangaluru", state: "Karnataka" },
-    VK: { city: "Mysuru", state: "Karnataka" },
-    SD: { city: "Dharwad", state: "Karnataka" },
-    AX: { city: "Moodbidri", state: "Karnataka" },
-    PN: { city: "Bengaluru", state: "Karnataka" },
-    RI: { city: "Bengaluru", state: "Karnataka" },
-    CK: { city: "Bengaluru", state: "Karnataka" },
-  };
 
 // ─── GET /api/report ─────────────────────────────────────────────────────────
 
@@ -126,16 +94,19 @@ export async function GET(request: Request) {
         const regs = regsByEvent[ev._id.toString()] ?? [];
         let revenue = 0;
         let atriaRegs = 0;
+        let atriaParticipants = 0;
         let participants = 0;
         const collegeCount: Record<string, number> = {};
 
         for (const r of regs) {
             // Only count completed payments for revenue
             if (r.paymentStatus === "completed") revenue += r.amountPaid ?? 0;
-            participants += 1 + (r.teamMembers?.length ?? 0);
+            const memberCount = 1 + (r.teamMembers?.length ?? 0);
+            participants += memberCount;
             const usn = r.userId?.collegeId ?? null;
             if (isAtria(usn)) {
                 atriaRegs++;
+                atriaParticipants += memberCount;
             } else {
                 const code = extractCollegeCode(usn);
                 if (code) collegeCount[code] = (collegeCount[code] ?? 0) + 1;
@@ -150,6 +121,8 @@ export async function GET(request: Request) {
             price: ev.price ?? 0,
             registrations: regs.length,
             participants,
+            atriaParticipants,
+            externalParticipants: participants - atriaParticipants,
             revenue,
             atriaRegs,
             externalRegs: regs.length - atriaRegs,
@@ -173,14 +146,6 @@ export async function GET(request: Request) {
         }
     }
     const registeredCollegeCodes = new Set<string>(["AT", ...Object.keys(overallColleges)]);
-    const registeredCities = new Set<string>();
-    const registeredStates = new Set<string>();
-    for (const code of registeredCollegeCodes) {
-      const location = COLLEGE_LOCATION_MAP[code];
-      if (!location) continue;
-      registeredCities.add(location.city);
-      registeredStates.add(location.state);
-    }
     const topExternal = Object.entries(overallColleges)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 10)
@@ -246,16 +211,17 @@ export async function GET(request: Request) {
             atria: totalAtria,
             external: totalExternal,
         },
-          geography: {
+        geography: {
             colleges: registeredCollegeCodes.size,
-            cities: registeredCities.size,
-            states: registeredStates.size,
           },
         events: eventStats.map(e => ({
             id: e.id,
             name: e.title,
             category: e.category,
             regs: e.registrations,
+            participants: e.participants,
+            atriaParticipants: e.atriaParticipants,
+            externalParticipants: e.externalParticipants,
             fee: e.price,
             revenue: e.revenue,
         })),
@@ -591,33 +557,11 @@ function GeoRow({ data }) {
 
   return (
     <section className="section mt-4">
-      <div className="grid grid-cols-3 gap-3">
-        <div className="card px-5 py-3.5">
-          <Eyebrow>Total Colleges</Eyebrow>
-          <div className="mt-2 flex items-end justify-between gap-4">
-            <div className="text-[28px] leading-none font-bold tracking-tight num">{g.colleges}</div>
-            <div className="text-[11px] text-[#525252] text-right leading-snug">
-              Unique institutions registered
-            </div>
-          </div>
-        </div>
-        <div className="card px-5 py-3.5">
-          <Eyebrow>Cities</Eyebrow>
-          <div className="mt-2 flex items-end justify-between gap-4">
-            <div className="text-[28px] leading-none font-bold tracking-tight num">{g.cities}</div>
-            <div className="text-[11px] text-[#525252] text-right leading-snug">
-              Distinct city locations
-            </div>
-          </div>
-        </div>
-        <div className="card px-5 py-3.5">
-          <Eyebrow>States</Eyebrow>
-          <div className="mt-2 flex items-end justify-between gap-4">
-            <div className="text-[28px] leading-none font-bold tracking-tight num">{g.states}</div>
-            <div className="text-[11px] text-[#525252] text-right leading-snug">
-              Distinct state locations
-            </div>
-          </div>
+      <div className="card px-5 py-3.5 flex items-center justify-between gap-4">
+        <Eyebrow>Total Colleges</Eyebrow>
+        <div className="flex items-baseline gap-3">
+          <div className="text-[28px] leading-none font-bold tracking-tight num">{g.colleges}</div>
+          <div className="text-[11px] text-[#525252] leading-snug">Unique institutions registered</div>
         </div>
       </div>
     </section>
@@ -715,13 +659,27 @@ function AtriaVsExternal({ data }) {
 
   const totalAtria = rows.reduce((s, r) => s + r.atria, 0);
   const totalExt = rows.reduce((s, r) => s + r.external, 0);
+  const totalParticipants = rows.reduce((s, r) => s + (r.participants || r.total), 0);
+  const totalAtriaParticipants = rows.reduce((s, r) => s + (r.atriaParticipants || 0), 0);
+  const totalExternalParticipants = rows.reduce((s, r) => s + (r.externalParticipants || 0), 0);
+
+  function CountCell({ regs, participants, className = "" }) {
+    return (
+      <div className={"text-right " + className}>
+        <span className="num text-[12px]">{regs}</span>
+        {participants != null && participants !== regs && (
+          <span className="num text-[10px] text-[#A3A3A3] ml-0.5">({participants})</span>
+        )}
+      </div>
+    );
+  }
 
   return (
     <section className="section mt-12">
       <SectionHead
         no="02"
         title="Registration Distribution"
-        kicker='Atria vs Other Colleges, classified by USN prefix. A registrant whose USN begins with "1AT…" is counted as Atria; everything else is external.'
+        kicker='Atria vs Other Colleges, classified by USN prefix. A registrant whose USN begins with "1AT…" is counted as Atria; everything else is external. Numbers in parentheses indicate individual participants.'
       >
         <div className="mono text-[11px] text-[#525252] space-y-0.5">
           <div><span className="dot mr-1.5 align-middle" />Atria · <span className="num">{totalAtria}</span></div>
@@ -730,7 +688,7 @@ function AtriaVsExternal({ data }) {
       </SectionHead>
 
       <div className="card card-large overflow-hidden">
-        <div className="grid grid-cols-[1fr_64px_72px_56px_60px] gap-3 px-5 py-2.5 bg-[#FAFAFA] border-b border-[#E5E5E5]">
+        <div className="grid grid-cols-[1fr_80px_88px_72px_60px] gap-3 px-5 py-2.5 bg-[#FAFAFA] border-b border-[#E5E5E5]">
           <div className="eyebrow">Event</div>
           <div className="eyebrow text-right">Atria</div>
           <div className="eyebrow text-right">External</div>
@@ -742,27 +700,42 @@ function AtriaVsExternal({ data }) {
           {rows.map((r) => {
             const pctA = r.atriaPct;
             return (
-              <div key={r.id} className="row-item grid grid-cols-[1fr_64px_72px_56px_60px] items-center gap-3 py-3">
+              <div key={r.id} className="row-item grid grid-cols-[1fr_80px_88px_72px_60px] items-center gap-3 py-3">
                 <div>
                   <div className="text-[12.5px] font-medium leading-none mb-1.5">{r.name}</div>
                   <div className="track">
                     <span style={{width: pctA + "%"}} />
                   </div>
                 </div>
-                <div className="text-right num text-[12px]">{r.atria}</div>
-                <div className="text-right num text-[12px] text-[#525252]">{r.external}</div>
-                <div className="text-right num text-[12px] font-semibold">{r.total}</div>
+                <CountCell regs={r.atria} participants={r.atriaParticipants} />
+                <CountCell regs={r.external} participants={r.externalParticipants} className="text-[#525252]" />
+                <CountCell regs={r.total} participants={r.participants} className="font-semibold" />
                 <div className="text-right num text-[12px]">{pctA.toFixed(1)}%</div>
               </div>
             );
           })}
         </div>
 
-        <div className="grid grid-cols-[1fr_64px_72px_56px_60px] items-center gap-3 px-5 py-3 border-t border-black bg-[#FAFAFA]">
+        <div className="grid grid-cols-[1fr_80px_88px_72px_60px] items-center gap-3 px-5 py-3 border-t border-black bg-[#FAFAFA]">
           <div className="text-[12.5px] font-semibold">Total</div>
-          <div className="text-right num text-[12.5px] font-semibold">{totalAtria}</div>
-          <div className="text-right num text-[12.5px] font-semibold">{totalExt}</div>
-          <div className="text-right num text-[12.5px] font-semibold">{totalAtria + totalExt}</div>
+          <div className="text-right">
+            <span className="num text-[12.5px] font-semibold">{totalAtria}</span>
+            {totalAtriaParticipants !== totalAtria && (
+              <span className="num text-[10px] text-[#A3A3A3] ml-0.5">({totalAtriaParticipants})</span>
+            )}
+          </div>
+          <div className="text-right">
+            <span className="num text-[12.5px] font-semibold">{totalExt}</span>
+            {totalExternalParticipants !== totalExt && (
+              <span className="num text-[10px] text-[#A3A3A3] ml-0.5">({totalExternalParticipants})</span>
+            )}
+          </div>
+          <div className="text-right">
+            <span className="num text-[12.5px] font-semibold">{totalAtria + totalExt}</span>
+            {totalParticipants !== (totalAtria + totalExt) && (
+              <span className="num text-[10px] text-[#A3A3A3] ml-0.5">({totalParticipants})</span>
+            )}
+          </div>
           <div className="text-right num text-[12px] font-semibold">
             {(totalAtria + totalExt) > 0
               ? ((totalAtria / (totalAtria + totalExt)) * 100).toFixed(1) + "%"
