@@ -100,7 +100,7 @@ export async function GET(request: Request) {
 
         for (const r of regs) {
             // Only count completed payments for revenue
-            if (r.paymentStatus === "completed") revenue += r.amountPaid ?? 0;
+            if (r.paymentStatus === "completed" && r.paymentId?.startsWith("vig_")) revenue += r.amountPaid ?? 0;
             const memberCount = 1 + (r.teamMembers?.length ?? 0);
             participants += memberCount;
             const usn = r.userId?.collegeId ?? null;
